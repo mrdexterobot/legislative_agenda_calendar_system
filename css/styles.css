@@ -1,0 +1,164 @@
+/* ==========================================================================
+   Legislative Agenda & Calendar Management System
+   Design tokens + component styles
+
+   Layout/spacing utilities come from Tailwind (loaded via CDN in each page).
+   This file carries the parts Tailwind's play-CDN can't express: color
+   tokens, the two paired typefaces, and the "route slip" stamp components
+   that are specific to this system's subject (a document's paper trail
+   through reading → transmittal → mayoral action).
+   ========================================================================== */
+
+:root {
+  /* Ink (navy — authority, sidebar, headings) */
+  --ink-900: #16243D;
+  --ink-800: #1D2F4E;
+  --ink-700: #2C4570;
+  --ink-600: #3C5A8C;
+
+  /* Brass (the seal / stamp gold — accents, medium priority, active states) */
+  --brass-700: #8A6308;
+  --brass-600: #A8790C;
+  --brass-100: #F1E6C4;
+
+  /* Maroon (veto / overdue — an official rejection stamp, not a generic red) */
+  --maroon-700: #7A2331;
+  --maroon-600: #93303F;
+  --maroon-100: #F2DEE1;
+
+  /* Forest (signed / approved) */
+  --forest-700: #2F6F4E;
+  --forest-600: #3B8560;
+  --forest-100: #DCEEE3;
+
+  /* Slate blue (deemed approved by operation of law — distinct from "signed") */
+  --info-700: #1F4E8C;
+  --info-600: #33639F;
+  --info-100: #DCE7F5;
+
+  /* Paper + neutrals (manila-folder paper, desaturated — this is a paper-trail system) */
+  --paper-50: #F1EDE0;
+  --paper-100: #E8E2CE;
+  --line-200: #DAD2B6;
+  --slate-600: #4B5563;
+  --slate-500: #6B7280;
+  --ink-text: #20293A;
+}
+
+html, body {
+  background: var(--paper-50);
+  color: var(--ink-text);
+  font-family: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+.font-display { font-family: "Source Serif 4", Georgia, serif; }
+.font-mono    { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+/* ---------- Sidebar ---------- */
+.app-sidebar {
+  background: var(--ink-900);
+  background-image: linear-gradient(180deg, var(--ink-800) 0%, var(--ink-900) 55%);
+}
+.app-sidebar .nav-link {
+  color: #C6CEDD;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.app-sidebar .nav-link:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.app-sidebar .nav-link.active {
+  background: rgba(168,121,12,0.14);
+  border-left-color: var(--brass-600);
+  color: #fff;
+}
+.app-sidebar .nav-link .fa-fw { color: #8C9BB5; }
+.app-sidebar .nav-link:hover .fa-fw,
+.app-sidebar .nav-link.active .fa-fw { color: var(--brass-600); }
+
+/* ---------- Seal badge (login + sidebar wordmark) ---------- */
+.seal-badge {
+  width: 44px; height: 44px; border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at 30% 30%, var(--brass-600), var(--brass-700));
+  color: #F1E6C4;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25), 0 2px 6px rgba(0,0,0,0.35);
+  font-size: 18px;
+}
+
+/* ---------- Dossier card (folder-tab styled card) ---------- */
+.dossier-card {
+  background: #FBFAF5;
+  border: 1px solid var(--line-200);
+  border-left: 4px solid var(--ink-700);
+  border-radius: 10px;
+}
+.dossier-card.accent-brass   { border-left-color: var(--brass-600); }
+.dossier-card.accent-maroon  { border-left-color: var(--maroon-700); }
+.dossier-card.accent-forest  { border-left-color: var(--forest-700); }
+.dossier-card.accent-info    { border-left-color: var(--info-700); }
+
+/* ---------- Status pills ---------- */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px; border-radius: 9999px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.pill-brass   { background: var(--brass-100);  color: var(--brass-700); }
+.pill-maroon  { background: var(--maroon-100); color: var(--maroon-700); }
+.pill-forest  { background: var(--forest-100); color: var(--forest-700); }
+.pill-info    { background: var(--info-100);   color: var(--info-700); }
+.pill-slate   { background: #E7E9EC;           color: var(--slate-600); }
+
+/* ---------- Route-slip stamp stepper ----------
+   Signature element: mirrors the physical routing slip that travels with a
+   paper ordinance through the Sanggunian and into the Mayor's office, where
+   each stage receives a stamp. Filled = done, outline = pending,
+   hatched = lapsed into law by inaction (Sec. 54(b) — this is NOT a veto). */
+.stamp-stepper { display: flex; align-items: flex-start; }
+.stamp-stepper .stamp-node { display: flex; flex-direction: column; align-items: center; flex: 1; position: relative; }
+.stamp-stepper .stamp-track {
+  position: absolute; top: 17px; left: 50%; width: 100%; height: 0;
+  border-top: 2px dashed var(--line-200); z-index: 0;
+}
+.stamp-stepper .stamp-node:first-child .stamp-track { display: none; }
+.stamp-circle {
+  width: 34px; height: 34px; border-radius: 9999px; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; background: #FBFAF5;
+  border: 2px solid var(--line-200); color: var(--slate-500);
+}
+.stamp-circle.is-done   { border-color: var(--forest-700); background: var(--forest-100); color: var(--forest-700); }
+.stamp-circle.is-current{ border-color: var(--brass-600); background: var(--brass-100); color: var(--brass-700);
+  box-shadow: 0 0 0 3px rgba(168,121,12,0.15); }
+.stamp-circle.is-veto   { border-color: var(--maroon-700); background: var(--maroon-100); color: var(--maroon-700); }
+.stamp-circle.is-lapsed {
+  border-color: var(--info-700); color: var(--info-700);
+  background: repeating-linear-gradient(45deg, var(--info-100), var(--info-100) 4px, #FBFAF5 4px, #FBFAF5 8px);
+}
+.stamp-label { margin-top: 6px; font-size: 11px; text-align: center; max-width: 84px; color: var(--slate-600); line-height: 1.25; }
+
+/* ---------- Countdown chip ---------- */
+.countdown-chip {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px; padding: 2px 8px; border-radius: 6px;
+  background: #EFF2F5; color: var(--slate-600);
+}
+.countdown-chip.is-urgent { background: var(--maroon-100); color: var(--maroon-700); }
+.countdown-chip.is-ok     { background: var(--forest-100); color: var(--forest-700); }
+
+/* ---------- Buttons ---------- */
+.btn-primary {
+  background: var(--ink-800); color: #fff; border-radius: 8px;
+  padding: 8px 16px; font-weight: 600; font-size: 14px;
+  transition: background 0.15s ease;
+}
+.btn-primary:hover { background: var(--ink-700); }
+.btn-outline {
+  background: transparent; color: var(--ink-800); border: 1px solid var(--line-200);
+  border-radius: 8px; padding: 8px 16px; font-weight: 600; font-size: 14px;
+}
+.btn-outline:hover { background: #EFEAD9; }
+
+/* ---------- Misc ---------- */
+.divider-dashed { border-top: 1px dashed var(--line-200); }
+::selection { background: var(--brass-100); }

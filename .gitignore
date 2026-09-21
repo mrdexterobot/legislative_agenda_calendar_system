@@ -1,0 +1,18 @@
+# Real credentials — never commit this. Commit includes/config.sample.php instead.
+includes/config.php
+
+# Auto-generated debug files — regenerated on every call, never required/executed
+includes/debug_last_ai_response.php
+includes/debug_last_email.php
+
+# Uploaded evidence files — user-supplied, not part of the codebase
+uploads/evidence/*
+!uploads/evidence/.htaccess
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+
+# Logs
+*.log

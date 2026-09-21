@@ -1,0 +1,17 @@
+# Block direct browser access to folders that should only ever be included
+# by PHP, never requested directly (defense in depth — includes/.htaccess
+# and database/.htaccess below do the same thing more specifically).
+<FilesMatch "\.(sql|md)$">
+    Require all denied
+</FilesMatch>
+
+# Basic security headers. Uncomment the HSTS line only once this is
+# actually deployed on a domain with HTTPS working — enabling it on
+# localhost or on a domain without a valid certificate will make the
+# browser refuse to load the site over plain HTTP afterward.
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+</IfModule>
