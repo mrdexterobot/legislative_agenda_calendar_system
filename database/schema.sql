@@ -358,7 +358,7 @@ CREATE TABLE integration_tokens (
 
 -- ----------------------------------------------------------------------------
 -- evidence_attachments
--- Optional supporting file for a deadline or session completion (minutes
+-- Supporting file for a deadline or session completion (minutes
 -- excerpt, signed report, attendance sheet scan, etc). Generic across both
 -- entity types via entity_type+entity_id (a lightweight lookup table, not
 -- FK-bound to either parent — a strict FK can't point at "either of two

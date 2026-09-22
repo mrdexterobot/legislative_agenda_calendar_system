@@ -2,7 +2,7 @@
 /**
  * config.sample.php
  *
- * TEMPLATE — copy this file to "config.php" and fill in real values there.
+ * TEMPLATE — copy this file to "config.php" when running outside Docker.
  * config.php is excluded from git (see .gitignore) so real credentials never
  * get committed. This sample file is safe to commit.
  */
@@ -15,15 +15,15 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
 
 
 // ---- Database ----
-define('DB_HOST', 'localhost');
-define('DB_NAME', 'legislative_agenda_system');
-define('DB_USER', 'root');
-define('DB_PASS', '');
+define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+define('DB_NAME', getenv('DB_NAME') ?: 'legislative_agenda_system');
+define('DB_USER', getenv('DB_USER') ?: 'root');
+define('DB_PASS', getenv('DB_PASS') ?: '');
 define('DB_CHARSET', 'utf8mb4');
 
 // ---- AI (Groq) ----
-define('GROQ_API_KEY', 'PASTE_YOUR_GROQ_KEY_HERE');
-define('GROQ_MODEL', 'openai/gpt-oss-20b');
+define('GROQ_API_KEY', getenv('GROQ_API_KEY') ?: 'PASTE_YOUR_GROQ_KEY_HERE');
+define('GROQ_MODEL', getenv('GROQ_MODEL') ?: 'openai/gpt-oss-20b');
 
 // ---- Email (SMTP via Brevo) ----
 //   SMTP_USERNAME    SMTP & API -> SMTP tab -> "Login" (9xxxxx@smtp-brevo.com)
@@ -35,16 +35,16 @@ define('GROQ_MODEL', 'openai/gpt-oss-20b');
 //                    "MAIL FROM" before the message is ever queued.
 // If port 587 is blocked on your network or host, Brevo also accepts 2525.
 // Check all of this at Admin -> Email Delivery Test.
-define('SMTP_HOST', 'smtp-relay.brevo.com');
-define('SMTP_PORT', 587);
-define('SMTP_USERNAME', 'PASTE_YOUR_SMTP_LOGIN_HERE');
-define('SMTP_PASSWORD', 'PASTE_YOUR_SMTP_KEY_HERE');
-define('SMTP_FROM_EMAIL', 'PASTE_YOUR_VERIFIED_SENDER_EMAIL_HERE');
-define('SMTP_FROM_NAME', 'Legislative Agenda & Calendar Management System');
+define('SMTP_HOST', getenv('SMTP_HOST') ?: 'smtp-relay.brevo.com');
+define('SMTP_PORT', (int) (getenv('SMTP_PORT') ?: 587));
+define('SMTP_USERNAME', getenv('SMTP_USERNAME') ?: '');
+define('SMTP_PASSWORD', getenv('SMTP_PASSWORD') ?: '');
+define('SMTP_FROM_EMAIL', getenv('SMTP_FROM_EMAIL') ?: '');
+define('SMTP_FROM_NAME', getenv('SMTP_FROM_NAME') ?: 'Legislative Agenda & Calendar Management System');
 
 // ---- Authentication ----
 // Random secret; replace before deploying anywhere reachable.
-define('APP_SECRET', 'change-this-to-a-long-random-string');
+define('APP_SECRET', getenv('APP_SECRET') ?: 'change-this-to-a-long-random-string');
 
 // Set to false once deployed on a real HTTPS domain. Controls whether the
 // session cookie is marked "Secure" — browsers refuse to send a Secure cookie

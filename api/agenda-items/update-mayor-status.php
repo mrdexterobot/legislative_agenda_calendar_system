@@ -48,6 +48,9 @@ if ($mayorAction !== null && !in_array($mayorAction, ['Signed', 'Vetoed', 'Deeme
 if ($mayorAction !== null && $mayorActionNotes === '') {
     jsonError('Please add a short note on how this was confirmed (e.g. signed copy received, Backstopping Committee report) before recording the Mayor\'s action.', 422);
 }
+if ($mayorAction !== null && !$mayorActionDate) {
+    jsonError('Please provide the date of the Mayor\'s action before recording it.', 422);
+}
 // LOOPHOLE CHECK: can't record a mayor action without a transmittal date —
 // there's nothing for the "window" to be measured against.
 if ($mayorAction !== null && !$transmittedDate) {

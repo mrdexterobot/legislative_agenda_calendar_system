@@ -253,7 +253,7 @@ document.getElementById("new-session-form")?.addEventListener("submit", async (e
 
 const READING_STAGES = ["1st Reading", "2nd Reading", "3rd Reading — Passed", "Committee Report Submitted"];
 
-function openCompleteModal(sessionId, pendingAttachment = null) {
+function openCompleteModal(sessionId, pendingAttachment = null, draft = {}) {
   const session = allSessions.find(s => s.id === sessionId);
   const items = session.agenda_items
     .map(item => availableAgendaItems.find(i => i.id === item.id))
@@ -290,11 +290,11 @@ function openCompleteModal(sessionId, pendingAttachment = null) {
               class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ink-700/20"></textarea>
 
             <label class="block text-xs font-semibold text-slate-600 mb-1 mt-3">
-              Attach supporting document <span class="font-normal text-slate-400">(optional — minutes excerpt, attendance sheet, etc.)</span>
+              Attach supporting document <span class="text-maroon-700 font-semibold">— required</span>
             </label>
             ${pendingAttachment
               ? `<p class="text-xs text-forest-700"><i class="fa-solid fa-circle-check mr-1"></i>Attached: ${pendingAttachment.original_filename}</p>`
-              : `<input id="complete-session-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" class="w-full text-xs" />`}
+              : `<input id="complete-session-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" class="w-full text-xs" required />`}
             <p id="complete-session-upload-status" class="text-[11px] text-slate-400 mt-1"></p>
           </div>
 
@@ -308,16 +308,24 @@ function openCompleteModal(sessionId, pendingAttachment = null) {
     </div>
   `;
 
+  const notesInput = document.querySelector('#complete-form textarea[name="completion_notes"]');
+  if (notesInput) notesInput.value = draft.completion_notes || "";
+  items.forEach(item => {
+    const stageInput = document.querySelector(`#complete-form select[name="stage_${item.id}"]`);
+    if (stageInput && draft[`stage_${item.id}`]) stageInput.value = draft[`stage_${item.id}`];
+  });
+
   document.getElementById("complete-backdrop").addEventListener("click", closeCompleteModal);
   document.getElementById("complete-cancel").addEventListener("click", closeCompleteModal);
 
   document.getElementById("complete-session-file")?.addEventListener("change", async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    const currentDraft = Object.fromEntries(new FormData(document.getElementById("complete-form")));
     document.getElementById("complete-session-upload-status").textContent = "Uploading…";
     try {
       const attachment = await uploadEvidenceFile("session", sessionId, file);
-      openCompleteModal(sessionId, attachment);
+      openCompleteModal(sessionId, attachment, currentDraft);
     } catch (err) {
       document.getElementById("complete-session-upload-status").textContent = "";
       alert(`Could not attach file: ${err.message}`);
@@ -333,6 +341,11 @@ function openCompleteModal(sessionId, pendingAttachment = null) {
     const completionNotes = (fd.completion_notes || "").trim();
     if (!completionNotes) {
       errorEl.textContent = "Please describe what happened at this session before marking it Completed.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    if (!pendingAttachment) {
+      errorEl.textContent = "Please attach a supporting document before marking this session Completed.";
       errorEl.classList.remove("hidden");
       return;
     }

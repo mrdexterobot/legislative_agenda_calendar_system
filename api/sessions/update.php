@@ -61,16 +61,24 @@ if (!in_array($status, ['Scheduled', 'Rescheduled', 'Completed', 'Cancelled'], t
 // with nothing backing it up — no record of what actually happened at the
 // session or who attests to it. Mirrors the same requirement already
 // enforced for Deadline Tracking completions (api/deadlines/update.php).
-// An OPTIONAL supporting file (minutes excerpt, attendance sheet scan,
-// etc.) can additionally be attached beforehand via api/evidence/upload.php
-// (entity_type=session, entity_id=$sessionId) — this endpoint doesn't need
-// to know about it directly since evidence is looked up by entity id at
-// display time, not stored as a column here.
+// A supporting file (minutes excerpt, attendance sheet scan, etc.) must be
+// attached beforehand via api/evidence/upload.php (entity_type=session,
+// entity_id=$sessionId). Enforce that here as well as in the UI so a direct
+// API request cannot mark a session complete without documentary evidence.
 $completionNotes = null;
 if ($status === 'Completed') {
     $completionNotes = trim($b['completion_notes'] ?? '');
     if ($completionNotes === '') {
         jsonError('Please add a short note on what happened at this session (e.g. quorum, key outcomes) before marking it Completed.', 422);
+    }
+    $evidenceStmt = $db->prepare(
+        "SELECT id FROM evidence_attachments
+         WHERE entity_type = 'session' AND entity_id = :id
+         LIMIT 1"
+    );
+    $evidenceStmt->execute([':id' => $sessionId]);
+    if (!$evidenceStmt->fetch()) {
+        jsonError('Please attach a supporting document (e.g. minutes excerpt or attendance sheet) before marking this session Completed.', 422);
     }
 }
 
