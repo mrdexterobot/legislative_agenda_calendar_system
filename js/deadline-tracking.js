@@ -5,7 +5,7 @@ let deadlineSort = "due_date"; // due_date | status | assignee
 let showDeletedDeadlines = false; // admin only
 
 function currentUserId() { return window.CURRENT_USER?.id; }
-function isAdminUser() { return window.CURRENT_USER?.role === "admin"; }
+function isAdminUser() { return isAdminOrAbove(); }
 
 async function renderDeadlineModule() {
   document.getElementById("reminder-lead").value = reminderLeadDays;

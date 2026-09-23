@@ -9,14 +9,16 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $db = getDb();
-$isAdmin = $user['role'] === 'admin';
+$isAdmin = isAdminOrAbove($user);
 
 $pendingPriority = (int) $db->query(
     "SELECT COUNT(*) FROM agenda_items WHERE confirmed_priority IS NULL AND is_archived = 0"
 )->fetchColumn();
 
 $upcoming7 = (int) $db->query(
-    "SELECT COUNT(*) FROM sessions WHERE status = 'Scheduled' AND session_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)"
+    "SELECT COUNT(*) FROM sessions
+     WHERE status = 'Scheduled' AND is_deleted = 0
+       AND session_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)"
 )->fetchColumn();
 
 // VISIBILITY FIX: this used to count every internal deadline due within 7
@@ -50,7 +52,9 @@ $awaitingMayor = (int) $db->query(
 )->fetchColumn();
 
 $upcomingSessions = $db->query(
-    "SELECT * FROM sessions WHERE status = 'Scheduled' ORDER BY session_date ASC, session_time_24h ASC LIMIT 5"
+    "SELECT * FROM sessions
+     WHERE status = 'Scheduled' AND is_deleted = 0
+     ORDER BY session_date ASC, session_time_24h ASC LIMIT 5"
 )->fetchAll();
 
 $priorityRank = ['High' => 0, 'Medium' => 1, 'Low' => 2, null => 3];

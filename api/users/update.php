@@ -22,6 +22,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/csrf.php';
 require_once __DIR__ . '/../../includes/audit.php';
 require_once __DIR__ . '/../../includes/password_policy.php';
+require_once __DIR__ . '/../../includes/mfa.php';
 
 $admin = requireApiRole('admin');
 requireCsrfToken();
@@ -45,14 +46,29 @@ if (!$target) {
 }
 
 $isSelf = $id === (int) $admin['id'];
+$actingIsSuperadmin = $admin['role'] === 'superadmin';
+$targetIsPrivileged = in_array($target['role'], ['admin', 'superadmin'], true);
+
+// Keep the privilege boundary in one blanket gate so a future editable
+// field cannot accidentally let a plain admin modify an admin-level account.
+if ($targetIsPrivileged && !$actingIsSuperadmin) {
+    jsonError('Only a superadmin can edit an admin-level account.', 403);
+}
+if (isset($b['role']) && in_array($b['role'], ['admin', 'superadmin'], true) && !$actingIsSuperadmin) {
+    jsonError('Only a superadmin can grant admin-level access.', 403);
+}
 
 /** Counts active admins, used by the several "don't lock everyone out" guards. */
-$activeAdmins = fn() => (int) $db->query("SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = 1")->fetchColumn();
+$activeAdminOrAbove = fn() => (int) $db->query("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'superadmin') AND is_active = 1")->fetchColumn();
+$activeSuperadmins = fn() => (int) $db->query("SELECT COUNT(*) FROM users WHERE role = 'superadmin' AND is_active = 1")->fetchColumn();
 
 // Don't let the last remaining admin be demoted — that would lock everyone
 // out of admin functions with no way back short of editing the database.
-if (isset($b['role']) && $b['role'] !== 'admin' && $target['role'] === 'admin' && $activeAdmins() <= 1) {
-    jsonError('Cannot change the role of the last remaining admin account.', 409);
+if (isset($b['role']) && $b['role'] === 'staff' && $targetIsPrivileged && $activeAdminOrAbove() <= 1) {
+    jsonError('Cannot remove admin-level access from the last remaining admin-level account.', 409);
+}
+if (isset($b['role']) && $b['role'] !== 'superadmin' && $target['role'] === 'superadmin' && $activeSuperadmins() <= 1) {
+    jsonError('Cannot remove superadmin from the last remaining superadmin account.', 409);
 }
 
 $fields = [];
@@ -100,8 +116,8 @@ if (isset($b['email']) && trim($b['email']) !== '') {
 
 // ---- Role ----
 if (isset($b['role'])) {
-    if (!in_array($b['role'], ['admin', 'staff'], true)) {
-        jsonError('Role must be admin or staff.', 422);
+    if (!in_array($b['role'], ['superadmin', 'admin', 'staff'], true)) {
+        jsonError('Role must be superadmin, admin, or staff.', 422);
     }
     $fields[] = 'role = :role';
     $params[':role'] = $b['role'];
@@ -129,8 +145,8 @@ if (array_key_exists('mfa_enabled', $b)) {
     // "off" while the behaviour stays on, which would be misleading.
     $adminsForced = defined('MFA_REQUIRED_FOR_ADMINS') ? MFA_REQUIRED_FOR_ADMINS : true;
     $effectiveRole = $params[':role'] ?? $target['role'];
-    if (!$mfa && $adminsForced && $effectiveRole === 'admin') {
-        jsonError('Admin accounts always require a sign-in code while MFA_REQUIRED_FOR_ADMINS is on in includes/config.php. '
+    if (!$mfa && $adminsForced && in_array($effectiveRole, ['admin', 'superadmin'], true)) {
+        jsonError('Admin-level accounts always require a sign-in code while MFA_REQUIRED_FOR_ADMINS is on in includes/config.php. '
             . 'Change the role to staff, or switch that setting off, if this account genuinely should not use one.', 409);
     }
     $fields[] = 'mfa_enabled = :mfa';
@@ -145,8 +161,11 @@ if (array_key_exists('is_active', $b)) {
         if ($isSelf) {
             jsonError('You cannot deactivate your own account while signed in as it.', 409);
         }
-        if ($target['role'] === 'admin' && $activeAdmins() <= 1) {
-            jsonError('Cannot deactivate the last remaining admin account.', 409);
+        if ($targetIsPrivileged && $activeAdminOrAbove() <= 1) {
+            jsonError('Cannot deactivate the last remaining admin-level account.', 409);
+        }
+        if ($target['role'] === 'superadmin' && $activeSuperadmins() <= 1) {
+            jsonError('Cannot deactivate the last remaining superadmin account.', 409);
         }
     }
     $fields[] = 'is_active = :is_active';
@@ -172,6 +191,9 @@ if (!$fields && !$changed) {
 if ($fields) {
     try {
         $db->prepare('UPDATE users SET ' . implode(', ', $fields) . ' WHERE id = :id')->execute($params);
+        if (!empty($b['password']) || array_key_exists('mfa_enabled', $b) || (array_key_exists('is_active', $b) && empty($b['is_active']))) {
+            revokeAllTrustedDevices($id);
+        }
     } catch (PDOException $e) {
         error_log('User update failed: ' . $e->getMessage());
         jsonError('Could not save those changes. If this mentions an unknown column, run the round 7 and round 8 migrations.', 500);

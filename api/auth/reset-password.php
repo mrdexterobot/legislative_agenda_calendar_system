@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/audit.php';
 require_once __DIR__ . '/../../includes/password_policy.php';
+require_once __DIR__ . '/../../includes/mfa.php';
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     jsonError('Method not allowed.', 405);
@@ -72,6 +73,7 @@ try {
     $db->prepare('UPDATE users SET password_hash = :hash WHERE id = :id')
        ->execute([':hash' => password_hash($newPassword, PASSWORD_BCRYPT), ':id' => $user['id']]);
     $db->prepare('UPDATE password_resets SET used_at = NOW() WHERE id = :id')->execute([':id' => $reset['id']]);
+    revokeAllTrustedDevices((int) $user['id']);
 
     // A completed reset also clears any lockout: the person has just proven
     // control of the mailbox on the account, so continuing to hold the lock

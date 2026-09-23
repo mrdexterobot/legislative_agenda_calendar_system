@@ -44,6 +44,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
   </div>
   <div id="edit-modal-root"></div>
 <script src="../js/api-client.js"></script>
+<script src="../js/helpers.js"></script>
 <script src="../js/nav.js"></script>
 <script src="admin-agenda.js"></script>
 </body>

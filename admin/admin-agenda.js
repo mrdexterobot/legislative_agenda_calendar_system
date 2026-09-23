@@ -42,8 +42,10 @@ async function renderAgendaAdmin() {
   }));
 }
 
-function openEditModal(itemId) {
+async function openEditModal(itemId) {
   const item = adminItems.find(i => i.id === itemId);
+  if (!item) return;
+  const mayorEvidence = await loadEvidenceList("agenda_item", item.id);
   const mayorActionNotes = String(item.mayor_action_notes || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -87,6 +89,15 @@ function openEditModal(itemId) {
              </div>
            </div>
 
+           <div class="border-t border-[--line-200] pt-3">
+             <label class="block text-xs font-semibold text-slate-600 mb-1">
+               Supporting document <span class="text-maroon-700">— required when an action is selected</span>
+             </label>
+             <p id="mayor-evidence-status" class="text-xs text-slate-500 mb-2"></p>
+             <input id="mayor-action-evidence-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" class="w-full text-xs" />
+             <p id="mayor-evidence-upload-status" class="text-[11px] text-slate-400 mt-1"></p>
+           </div>
+
            <p id="edit-error" class="hidden text-xs text-maroon-700"></p>
           <div class="flex justify-end gap-2 pt-2">
             <button type="button" id="edit-cancel" class="btn-outline text-xs">Cancel</button>
@@ -103,12 +114,37 @@ function openEditModal(itemId) {
   const mayorActionInput = document.querySelector('#edit-form select[name="mayor_action"]');
   const mayorActionDateInput = document.querySelector('#edit-form input[name="mayor_action_date"]');
   const mayorActionNotesInput = document.querySelector('#edit-form textarea[name="mayor_action_notes"]');
+  const mayorEvidenceInput = document.getElementById("mayor-action-evidence-file");
+  const mayorEvidenceStatus = document.getElementById("mayor-evidence-status");
+  const mayorEvidenceUploadStatus = document.getElementById("mayor-evidence-upload-status");
+  const renderMayorEvidence = () => {
+    mayorEvidenceStatus.textContent = mayorEvidence.length
+      ? `Attached: ${mayorEvidence.map(file => file.original_filename).join(", ")}`
+      : "No supporting document attached yet.";
+  };
   const syncMayorEvidenceRequirements = () => {
     const hasAction = mayorActionInput.value !== "";
     mayorActionDateInput.required = hasAction;
     mayorActionNotesInput.required = hasAction;
+    mayorEvidenceInput.required = hasAction && mayorEvidence.length === 0;
   };
   mayorActionInput.addEventListener("change", syncMayorEvidenceRequirements);
+  mayorEvidenceInput.addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    mayorEvidenceUploadStatus.textContent = "Uploading…";
+    try {
+      const attachment = await uploadEvidenceFile("agenda_item", item.id, file);
+      mayorEvidence.push(attachment);
+      renderMayorEvidence();
+      mayorEvidenceUploadStatus.textContent = "Supporting document attached.";
+      syncMayorEvidenceRequirements();
+    } catch (err) {
+      mayorEvidenceUploadStatus.textContent = err.message;
+      e.target.value = "";
+    }
+  });
+  renderMayorEvidence();
   syncMayorEvidenceRequirements();
 
   document.getElementById("edit-form").addEventListener("submit", async (e) => {
@@ -118,6 +154,11 @@ function openEditModal(itemId) {
     errorEl.classList.add("hidden");
     if (fd.mayor_action && !String(fd.mayor_action_notes || "").trim()) {
       errorEl.textContent = "Please add a short note explaining how the Mayor's action was confirmed.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    if (fd.mayor_action && mayorEvidence.length === 0) {
+      errorEl.textContent = "Please attach a supporting document before recording the Mayor's action.";
       errorEl.classList.remove("hidden");
       return;
     }
@@ -141,10 +182,6 @@ function openEditModal(itemId) {
 
 function closeEditModal() {
   document.getElementById("edit-modal-root").innerHTML = "";
-}
-
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
 }
 
 document.getElementById("show-archived").addEventListener("change", (e) => {

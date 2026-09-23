@@ -12,8 +12,8 @@
  * system (deadlines, sessions) requires a short note; this one didn't.
  * mayor_action_notes is now required whenever mayor_action is being SET
  * (not when only the transmittal date is being recorded, since there's
- * nothing to explain yet at that point). An optional supporting file goes
- * through the same evidence_attachments table as deadlines/sessions
+ * nothing to explain yet at that point). A supporting file is also required
+ * and goes through the same evidence_attachments table as deadlines/sessions
  * (entity_type='agenda_item', entity_id=$itemId), uploaded beforehand via
  * api/evidence/upload.php the same way the other completion modals do.
  */
@@ -23,7 +23,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/csrf.php';
 require_once __DIR__ . '/../../includes/audit.php';
 
-$user = requireApiAuth(); // staff or admin — this is routine data entry, not system config
+$user = requireApiRole('admin'); // Mayor-action corrections are admin-only record changes
 requireCsrfToken();
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -50,6 +50,17 @@ if ($mayorAction !== null && $mayorActionNotes === '') {
 }
 if ($mayorAction !== null && !$mayorActionDate) {
     jsonError('Please provide the date of the Mayor\'s action before recording it.', 422);
+}
+if ($mayorAction !== null) {
+    $evidenceCheck = getDb()->prepare(
+        "SELECT id FROM evidence_attachments
+         WHERE entity_type = 'agenda_item' AND entity_id = :id
+         LIMIT 1"
+    );
+    $evidenceCheck->execute([':id' => $itemId]);
+    if (!$evidenceCheck->fetch()) {
+        jsonError('Please attach a supporting document before recording the Mayor\'s action.', 422);
+    }
 }
 // LOOPHOLE CHECK: can't record a mayor action without a transmittal date —
 // there's nothing for the "window" to be measured against.

@@ -1,5 +1,13 @@
 let adminUsers = [];
 
+function roleLabel(role) {
+  return role === "superadmin" ? "Superadmin" : role === "admin" ? "Admin" : "Staff";
+}
+
+function rolePillClass(role) {
+  return role === "superadmin" ? "pill-maroon" : role === "admin" ? "pill-info" : "pill-slate";
+}
+
 async function renderUsersAdmin() {
   const container = document.getElementById("users-list");
   try {
@@ -14,7 +22,7 @@ async function renderUsersAdmin() {
       <div class="min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
           <span class="font-semibold text-sm text-ink-900">${u.full_name}</span>
-          <span class="pill ${u.role === "admin" ? "pill-maroon" : "pill-info"}">${u.role}</span>
+          <span class="pill ${rolePillClass(u.role)}">${roleLabel(u.role)}</span>
           ${!u.is_active ? `<span class="pill pill-slate">Deactivated</span>` : ""}
           ${u.is_locked ? `<span class="pill pill-brass"><i class="fa-solid fa-lock text-[10px]"></i>Locked out</span>` : ""}
           ${u.mfa_enabled ? `<span class="pill pill-forest"><i class="fa-solid fa-shield-halved text-[10px]"></i>Sign-in code</span>` : ""}
@@ -73,6 +81,8 @@ function openUserEditModal(userId) {
   const u = adminUsers.find(x => x.id === userId);
   if (!u) return;
   const esc = (s) => (s || "").replace(/"/g, "&quot;");
+  const mfaIsAvailable = u.mfa_enabled !== null && u.mfa_enabled !== undefined;
+  const mfaIsEnabled = Number(u.mfa_enabled) === 1;
 
   document.getElementById("edit-user-modal-root").innerHTML = `
     <div id="edit-user-backdrop" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(22,36,61,0.55)">
@@ -96,6 +106,7 @@ function openUserEditModal(userId) {
               <select name="role" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm">
                 <option value="staff" ${u.role === "staff" ? "selected" : ""}>Staff (councilor/legislative staff)</option>
                 <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin</option>
+                ${window.CURRENT_USER?.role === "superadmin" ? `<option value="superadmin" ${u.role === "superadmin" ? "selected" : ""}>Superadmin</option>` : ""}
               </select>
             </div>
           </div>
@@ -113,10 +124,10 @@ function openUserEditModal(userId) {
 
           <div class="border-t border-[--line-200] pt-3">
             <label class="flex items-center gap-2 text-sm text-ink-800">
-              <input type="checkbox" name="mfa_enabled" ${u.mfa_enabled ? "checked" : ""} class="rounded border-[--line-200]" />
+              <input type="checkbox" name="mfa_enabled" ${mfaIsEnabled ? "checked" : ""} ${mfaIsAvailable ? "" : "disabled"} class="rounded border-[--line-200]" />
               Require an emailed sign-in code (second factor)
             </label>
-            <p class="text-[11px] text-slate-400 mt-1">Admin accounts always require one. Turning it on for staff is recommended for anyone who can confirm priorities.</p>
+            <p class="text-[11px] text-slate-400 mt-1">Admin accounts always require one. Turning it on for staff is recommended for anyone who can confirm priorities.${mfaIsAvailable ? "" : " MFA controls are unavailable until the round-8 database migration is applied."}</p>
           </div>
 
           <div class="border-t border-[--line-200] pt-3">
@@ -152,8 +163,15 @@ function openUserEditModal(userId) {
       full_name: fd.get("full_name"),
       email: fd.get("email"),
       role: fd.get("role"),
-      mfa_enabled: fd.get("mfa_enabled") ? 1 : 0,
     };
+    // Older databases do not have the round-8 MFA column. Also avoid sending
+    // an unchanged MFA value: the server quite correctly rejects turning MFA
+    // off for an admin, but that should not block an unrelated name/email edit.
+    const mfaIsAvailable = u.mfa_enabled !== null && u.mfa_enabled !== undefined;
+    const mfaValue = fd.get("mfa_enabled") ? 1 : 0;
+    if (mfaIsAvailable && mfaValue !== (Number(u.mfa_enabled) === 1 ? 1 : 0)) {
+      payload.mfa_enabled = mfaValue;
+    }
     if (fd.get("password")) payload.password = fd.get("password");
 
     const submitBtn = e.target.querySelector('button[type="submit"]');

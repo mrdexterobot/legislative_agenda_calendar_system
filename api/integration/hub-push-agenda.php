@@ -5,9 +5,8 @@
  * Part of the Integration Hub — plays the role of the Agenda Preparation
  * Module PUSHING a compiled proposed agenda to us, rather than us having
  * nothing to base scheduling decisions on. Marks the SELECTED confirmed-
- * priority, not-yet-transmitted items as ready_for_scheduling — this is
- * what Calendar Scheduling's "items to attach" checklist actually reads
- * from (see api/agenda-items/list.php / js/calendar-scheduling.js).
+ * priority, not-yet-transmitted items as ready_for_scheduling — including
+ * an unfinished item returning from a completed/cancelled schedule.
  *
  * SELECTION FIX: this used to push every eligible item in one shot with
  * no way to choose a subset — a real Agenda Preparation Module compiling
@@ -39,14 +38,51 @@ if (!is_array($itemIds) || !count($itemIds)) {
     jsonError('Select at least one item to push.', 400);
 }
 
+$itemIds = array_values(array_unique(array_filter(
+    $itemIds,
+    static fn($id): bool => is_string($id) && trim($id) !== ''
+)));
+if (!$itemIds) {
+    jsonError('Select at least one valid agenda item.', 400);
+}
+
 $db = getDb();
 
 $placeholders = implode(',', array_fill(0, count($itemIds), '?'));
 $stmt = $db->prepare(
-    "SELECT id, title FROM agenda_items
-     WHERE id IN ($placeholders)
-       AND confirmed_priority IS NOT NULL AND transmitted_to_mayor_date IS NULL
-       AND is_archived = 0 AND ready_for_scheduling = 0"
+    "SELECT ai.id, ai.title
+     FROM agenda_items ai
+     WHERE ai.id IN ($placeholders)
+       AND ai.confirmed_priority IS NOT NULL
+       AND ai.transmitted_to_mayor_date IS NULL
+       AND ai.is_archived = 0
+       AND NOT EXISTS (
+           SELECT 1
+           FROM readings r
+           WHERE r.agenda_item_id = ai.id
+             AND r.stage = '3rd Reading — Passed'
+       )
+       AND NOT EXISTS (
+           SELECT 1
+           FROM session_agenda_items sai
+           JOIN sessions s ON s.id = sai.session_id
+           WHERE sai.agenda_item_id = ai.id
+             AND s.is_deleted = 0
+             AND s.status IN ('Scheduled', 'Rescheduled')
+       )
+       AND (
+           ai.ready_for_scheduling = 0
+           OR EXISTS (
+               SELECT 1
+               FROM session_agenda_items sai
+               JOIN sessions s ON s.id = sai.session_id
+               WHERE sai.agenda_item_id = ai.id
+                 AND (
+                     s.status IN ('Completed', 'Cancelled')
+                     OR s.is_deleted = 1
+                 )
+           )
+       )"
 );
 $stmt->execute(array_values($itemIds));
 $eligible = $stmt->fetchAll();

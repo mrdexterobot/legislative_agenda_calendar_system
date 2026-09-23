@@ -102,7 +102,8 @@ function getAIPrioritySuggestion(array $item): array {
             'response_format' => ['type' => 'json_object'],
             'temperature'     => 0.4,
         ]),
-        CURLOPT_TIMEOUT => 15,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => 20,
     ]);
 
     $response  = curl_exec($ch);
@@ -128,6 +129,27 @@ function getAIPrioritySuggestion(array $item): array {
     if ($httpCode !== 200) {
         $errMsg = $data['error']['message'] ?? 'Unknown error';
         error_log("Groq API returned HTTP $httpCode: $errMsg");
+        if (in_array((int) $httpCode, [401, 403], true)) {
+            return [
+                'priority'  => null,
+                'reasoning' => 'AI suggestion unavailable — Groq rejected the API key. Update GROQ_API_KEY in the runtime configuration.',
+                'error'     => true,
+            ];
+        }
+        if ((int) $httpCode === 404) {
+            return [
+                'priority'  => null,
+                'reasoning' => 'AI suggestion unavailable — the configured Groq model was not found. Check GROQ_MODEL.',
+                'error'     => true,
+            ];
+        }
+        if ((int) $httpCode === 429) {
+            return [
+                'priority'  => null,
+                'reasoning' => 'AI suggestion unavailable — the Groq rate limit was reached. Try again later.',
+                'error'     => true,
+            ];
+        }
         return [
             'priority'  => null,
             'reasoning' => 'AI suggestion unavailable — please assess manually.',

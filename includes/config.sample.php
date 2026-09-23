@@ -49,7 +49,8 @@ define('APP_SECRET', getenv('APP_SECRET') ?: 'change-this-to-a-long-random-strin
 // Set to false once deployed on a real HTTPS domain. Controls whether the
 // session cookie is marked "Secure" — browsers refuse to send a Secure cookie
 // over plain HTTP, which would break login on localhost.
-define('APP_IS_LOCAL', true);
+$appIsLocal = filter_var(getenv('APP_IS_LOCAL') ?: 'true', FILTER_VALIDATE_BOOLEAN);
+define('APP_IS_LOCAL', $appIsLocal);
 
 // Minutes of inactivity before a signed-in session is destroyed.
 define('SESSION_IDLE_MINUTES', 60);

@@ -1,5 +1,5 @@
 -- Additive migration for: session completion evidence + evidence_attachments
--- table (deadline/session file uploads). Run alongside
+-- table (deadline/session/Mayor-action file uploads). Run alongside
 -- migration_add_deadline_assignment.sql if you haven't applied that one yet.
 -- Safe to run once; re-running will error on duplicate objects (harmless).
 
@@ -10,7 +10,7 @@ ALTER TABLE sessions
 
 CREATE TABLE IF NOT EXISTS evidence_attachments (
     id                INT AUTO_INCREMENT PRIMARY KEY,
-    entity_type       ENUM('deadline', 'session') NOT NULL,
+    entity_type       ENUM('deadline', 'session', 'agenda_item') NOT NULL,
     entity_id         VARCHAR(20) NOT NULL,
     original_filename VARCHAR(255) NOT NULL,
     stored_filename   VARCHAR(255) NOT NULL,

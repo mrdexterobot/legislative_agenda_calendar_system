@@ -46,7 +46,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
             <label class="flex items-center gap-2 text-xs text-slate-600 bg-white border border-[--line-200] rounded-lg px-3 py-2">
               <input type="checkbox" id="show-past" class="rounded border-[--line-200]" /> Show past/completed
             </label>
-            <?php if ($currentUser['role'] === 'admin'): ?>
+            <?php if (isAdminOrAbove($currentUser)): ?>
             <label class="flex items-center gap-2 text-xs text-slate-600 bg-white border border-[--line-200] rounded-lg px-3 py-2">
               <input type="checkbox" id="show-deleted-sessions" class="rounded border-[--line-200]" /> Show deleted
             </label>
@@ -61,7 +61,11 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
           <form id="new-session-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Date</label>
-              <input name="date" type="date" required class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm" />
+              <div class="flex gap-2">
+                <input name="date" type="date" required class="min-w-0 flex-1 border border-[--line-200] rounded-lg px-3 py-2 text-sm" />
+                <button type="button" id="ai-schedule-btn" class="btn-outline text-xs !py-2 whitespace-nowrap"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Suggest dates</button>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1">AI ranks conflict-free weekday dates; you still choose and save one.</p>
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Time</label>
@@ -93,6 +97,8 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
               <label class="block text-xs font-semibold text-slate-600 mb-1">Agenda items to attach</label>
               <div id="agenda-item-checks" class="max-h-32 overflow-y-auto border border-[--line-200] rounded-lg p-2 bg-white"></div>
             </div>
+
+            <div id="schedule-suggestions" class="hidden sm:col-span-2 dossier-card accent-forest p-3 text-xs"></div>
 
             <div id="conflict-warning" class="hidden sm:col-span-2 dossier-card accent-maroon p-3 text-xs text-maroon-700"></div>
 

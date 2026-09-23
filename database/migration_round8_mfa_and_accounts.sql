@@ -52,7 +52,7 @@ ALTER TABLE users
     ADD COLUMN mfa_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER role;
 
 -- Admin accounts default to MFA on.
-UPDATE users SET mfa_enabled = 1 WHERE role = 'admin';
+UPDATE users SET mfa_enabled = 1 WHERE role IN ('admin', 'superadmin');
 
 -- One live code per user at a time; a new request deletes the previous unused
 -- row. `attempts` caps guessing within the code's ten-minute window, the same
@@ -66,6 +66,27 @@ CREATE TABLE IF NOT EXISTS mfa_codes (
     used_at    TIMESTAMP NULL,
     ip_address VARCHAR(45) NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ---------------------------------------------------------------------------
+-- 1b. Trusted-device sessions
+--
+-- The browser receives only a random opaque token. The hash is stored in the
+-- database and expires automatically, so the token can be invalidated server
+-- side without weakening the MFA requirement for other devices.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS trusted_devices (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT NOT NULL,
+    token_hash    CHAR(64) NOT NULL UNIQUE,
+    expires_at    TIMESTAMP NOT NULL,
+    last_used_at  TIMESTAMP NULL,
+    revoked_at    TIMESTAMP NULL,
+    ip_address    VARCHAR(45) NULL,
+    user_agent    VARCHAR(255) NULL,
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_trusted_devices_user_active (user_id, revoked_at, expires_at),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

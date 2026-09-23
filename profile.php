@@ -48,6 +48,14 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
           <p class="text-[11px] text-slate-400 mt-3"><i class="fa-regular fa-circle-info mr-1"></i>Your username, name, and email are set by an admin. Use "Request info update" below if any of them needs to change.</p>
         </section>
 
+        <section class="dossier-card accent-info p-5">
+          <h2 class="font-display text-base text-ink-900 mb-1">Trusted sign-in device</h2>
+          <p class="text-xs text-slate-500 mb-3">If you selected “Remember this device,” this browser can skip the emailed MFA code for up to 30 days. Your password is still required.</p>
+          <button id="forget-device-btn" class="btn-outline text-xs !py-2" type="button">Forget this browser</button>
+          <p id="forget-device-success" class="hidden text-xs text-forest-700 mt-2"><i class="fa-solid fa-circle-check mr-1"></i>This browser has been forgotten.</p>
+          <p id="forget-device-error" class="hidden text-xs text-maroon-700 mt-2"></p>
+        </section>
+
         <section class="dossier-card p-5">
           <h2 class="font-display text-base text-ink-900 mb-3">Change password</h2>
           <form id="change-password-form" class="space-y-3">

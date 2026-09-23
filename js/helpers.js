@@ -16,6 +16,10 @@ function fmtDate(iso) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function isAdminOrAbove() {
+  return ["admin", "superadmin"].includes(window.CURRENT_USER?.role);
+}
+
 function priorityPill(priority) {
   if (!priority) return `<span class="pill pill-slate"><i class="fa-regular fa-circle-question"></i>Unset</span>`;
   const map = {
@@ -104,7 +108,8 @@ function renderReadingProgress(readings) {
   `;
 }
 
-/** Uploads one evidence file for a deadline or session completion via
+/** Uploads one evidence file for a deadline, session, or Mayor-action
+ * confirmation via
  * multipart/form-data — deliberately NOT routed through window.API, since
  * that helper always sends JSON. CSRF is still enforced the same way
  * (custom header), just built manually here. */

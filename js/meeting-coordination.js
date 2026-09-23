@@ -1,11 +1,11 @@
-let meetingFilter = "all"; // all | to-send | sent
+let meetingFilter = "to-send"; // to-send | sent | completed
 let meetingSort = "session_date"; // session_date | readiness | status
 
 function renderMeetingFilterTabs() {
   const tabs = [
-    { key: "all", label: "All" },
     { key: "to-send", label: "To be sent" },
     { key: "sent", label: "Sent" },
+    { key: "completed", label: "Completed" },
   ];
   document.getElementById("meeting-filter-tabs").innerHTML = tabs.map(t => `
     <button data-meeting-filter="${t.key}" class="px-3 py-1.5 rounded-md text-xs font-semibold ${meetingFilter === t.key ? "bg-ink-800 text-white" : "bg-white border border-[--line-200] text-slate-600"}">
@@ -31,9 +31,11 @@ async function renderMeetingModule() {
 
   let visible = [...meetings];
   if (meetingFilter === "to-send") {
-    visible = visible.filter(m => !m.notifications_sent);
+    visible = visible.filter(m => !["Completed", "Cancelled"].includes(m.status) && !m.notifications_sent);
   } else if (meetingFilter === "sent") {
-    visible = visible.filter(m => m.notifications_sent);
+    visible = visible.filter(m => !["Completed", "Cancelled"].includes(m.status) && m.notifications_sent);
+  } else if (meetingFilter === "completed") {
+    visible = visible.filter(m => m.status === "Completed");
   }
 
   const readinessScore = m => {
@@ -47,7 +49,7 @@ async function renderMeetingModule() {
   };
   const sorted = visible.sort(sorters[meetingSort] || sorters.session_date);
 
-  const isAdmin = window.CURRENT_USER?.role === "admin";
+  const isAdmin = isAdminOrAbove();
 
   container.innerHTML = sorted.map(m => {
     // Manual items — staff toggles these directly.

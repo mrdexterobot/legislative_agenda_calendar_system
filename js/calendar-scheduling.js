@@ -157,7 +157,7 @@ function renderList() {
   }).join("")}</div>`;
 }
 
-function isAdminUser() { return window.CURRENT_USER?.role === "admin"; }
+function isAdminUser() { return isAdminOrAbove(); }
 
 let monthOffset = 0; // 0 = current month, +1 = next month, -1 = previous month
 
@@ -260,12 +260,19 @@ function openCompleteModal(sessionId, pendingAttachment = null, draft = {}) {
     .filter(Boolean);
   const existingStagesByItem = {}; // item_id -> Set of stages already recorded
   items.forEach(i => { existingStagesByItem[i.id] = new Set((i.readings || []).map(r => r.stage)); });
+  const notificationsSent = Number(session.meeting?.notifications_sent) === 1;
 
   document.getElementById("complete-modal-root").innerHTML = `
     <div id="complete-backdrop" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(22,36,61,0.55)">
       <div class="dossier-card w-full max-w-lg p-6" style="background:#FBFAF5" onclick="event.stopPropagation()">
         <h3 class="font-display text-base text-ink-900 mb-1">Mark ${sessionLabel(session)} as Completed</h3>
         <p class="text-xs text-slate-500 mb-4">For each item, record the reading stage reached in this session — leave as "No action" for items that weren't voted on. This is how the system knows an item passed 3rd reading.</p>
+        <p class="dossier-card ${notificationsSent ? "accent-forest text-forest-700" : "accent-maroon text-maroon-700"} p-3 text-xs mb-3">
+          <i class="fa-solid ${notificationsSent ? "fa-circle-check" : "fa-triangle-exclamation"} mr-1"></i>
+          ${notificationsSent
+            ? "Meeting Coordination notification has been sent."
+            : "Send the meeting notification in Meeting Coordination before completing this session."}
+        </p>
         <form id="complete-form" class="space-y-3">
           ${items.length ? items.map(item => `
             <div class="border border-[--line-200] rounded-lg p-3">
@@ -349,20 +356,22 @@ function openCompleteModal(sessionId, pendingAttachment = null, draft = {}) {
       errorEl.classList.remove("hidden");
       return;
     }
+    if (!notificationsSent) {
+      errorEl.textContent = "Send the meeting notification in Meeting Coordination before marking this session Completed.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
 
     try {
-      await window.API.post("api/sessions/update.php", { id: sessionId, status: "Completed", completion_notes: completionNotes });
-
-      for (const item of items) {
-        const stage = fd[`stage_${item.id}`];
-        if (!stage) continue;
-        await window.API.post("api/agenda-items/add-reading.php", {
-          item_id: item.id,
-          stage,
-          reading_date: session.session_date,
-          session_id: sessionId,
-        });
-      }
+      const readingStages = Object.fromEntries(
+        items.map(item => [item.id, fd[`stage_${item.id}`] || ""])
+      );
+      await window.API.post("api/sessions/update.php", {
+        id: sessionId,
+        status: "Completed",
+        completion_notes: completionNotes,
+        reading_stages: readingStages,
+      });
 
       closeCompleteModal();
       renderCalendarModule();
@@ -507,3 +516,69 @@ document.getElementById("show-deleted-sessions")?.addEventListener("change", (e)
 });
 
 document.addEventListener("DOMContentLoaded", renderCalendarModule);
+
+document.getElementById("ai-schedule-btn")?.addEventListener("click", async () => {
+  const form = document.getElementById("new-session-form");
+  const button = document.getElementById("ai-schedule-btn");
+  const output = document.getElementById("schedule-suggestions");
+  const agendaItemIds = [...form.querySelectorAll("#agenda-item-checks input[type=checkbox]:checked")].map(input => input.value);
+  const venue = form.elements.venue.value.trim();
+  const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  })[char]);
+
+  if (!agendaItemIds.length) {
+    alert("Select at least one agenda item before asking for date suggestions.");
+    return;
+  }
+  if (!venue) {
+    alert("Enter a venue before asking for date suggestions.");
+    form.elements.venue.focus();
+    return;
+  }
+
+  const original = button.innerHTML;
+  button.disabled = true;
+  button.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>Thinking…';
+  output.classList.remove("hidden", "accent-maroon");
+  output.textContent = "Checking availability and asking the AI to rank the available dates…";
+
+  try {
+    const result = await window.API.post("api/ai/suggest-schedule.php", {
+      agenda_item_ids: agendaItemIds,
+      date_from: form.elements.date.value || todayIso(),
+      time: form.elements.time.value,
+      type: form.elements.type.value,
+      venue,
+      committee: form.elements.committee.value,
+      presiding_officer: form.elements.presiding_officer.value,
+    });
+
+    output.innerHTML = `
+      <p class="font-semibold text-forest-700 mb-2"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i>Suggested dates</p>
+      <div class="space-y-2">
+        ${result.suggestions.map(s => `
+          <div class="flex items-start justify-between gap-3 border border-[--line-200] rounded-lg bg-white p-2">
+            <p><strong>${escapeHtml(fmtDate(s.date))} at ${escapeHtml(s.time)}</strong><br><span class="text-slate-600">${escapeHtml(s.reasoning)}</span></p>
+            <button type="button" data-use-schedule-date="${escapeHtml(s.date)}" data-use-schedule-time="${escapeHtml(s.time)}" class="btn-outline text-[11px] !py-1 !px-2 whitespace-nowrap">Use date</button>
+          </div>
+        `).join("")}
+      </div>
+      <p class="text-[11px] text-slate-400 mt-2">These are suggestions only. Review the agenda and save the session explicitly.</p>
+    `;
+    output.querySelectorAll("[data-use-schedule-date]").forEach(useButton => {
+      useButton.addEventListener("click", () => {
+        form.elements.date.value = useButton.dataset.useScheduleDate;
+        form.elements.time.value = useButton.dataset.useScheduleTime;
+        output.querySelectorAll("[data-use-schedule-date]").forEach(other => other.classList.remove("btn-primary"));
+        useButton.classList.add("btn-primary");
+      });
+    });
+  } catch (err) {
+    output.textContent = `Could not generate date suggestions: ${err.message}`;
+    output.classList.add("accent-maroon");
+  } finally {
+    button.disabled = false;
+    button.innerHTML = original;
+  }
+});

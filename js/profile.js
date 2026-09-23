@@ -82,6 +82,20 @@ document.getElementById("request-deactivation-btn").addEventListener("click", ()
   });
 });
 
+document.getElementById("forget-device-btn").addEventListener("click", async () => {
+  const errorEl = document.getElementById("forget-device-error");
+  const successEl = document.getElementById("forget-device-success");
+  errorEl.classList.add("hidden");
+  successEl.classList.add("hidden");
+  try {
+    await window.API.post("api/auth/forget-device.php");
+    successEl.classList.remove("hidden");
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.classList.remove("hidden");
+  }
+});
+
 document.addEventListener("DOMContentLoaded", () => {
   renderAccountInfo();
   renderMyRequests();

@@ -40,10 +40,20 @@ if (!$target) {
     jsonError('User not found.', 404);
 }
 
-if ($target['role'] === 'admin') {
-    $activeAdmins = (int) $db->query("SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = 1")->fetchColumn();
-    if ($activeAdmins <= 1) {
-        jsonError('Cannot deactivate the last remaining admin account.', 409);
+if (in_array($target['role'], ['admin', 'superadmin'], true) && $admin['role'] !== 'superadmin') {
+    jsonError('Only a superadmin can deactivate an admin-level account.', 403);
+}
+
+if (in_array($target['role'], ['admin', 'superadmin'], true)) {
+    $activeAdminOrAbove = (int) $db->query("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'superadmin') AND is_active = 1")->fetchColumn();
+    if ($activeAdminOrAbove <= 1) {
+        jsonError('Cannot deactivate the last remaining admin-level account.', 409);
+    }
+    if ($target['role'] === 'superadmin') {
+        $activeSuperadmins = (int) $db->query("SELECT COUNT(*) FROM users WHERE role = 'superadmin' AND is_active = 1")->fetchColumn();
+        if ($activeSuperadmins <= 1) {
+            jsonError('Cannot deactivate the last remaining superadmin account.', 409);
+        }
     }
 }
 

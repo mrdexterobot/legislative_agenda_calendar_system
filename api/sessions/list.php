@@ -13,7 +13,7 @@ $db = getDb();
 // RISK FIX: soft-deleted sessions never show in the normal calendar for
 // anyone — only an admin explicitly asking for them (via the "Show
 // deleted" toggle in js/calendar-scheduling.js) sees is_deleted=1 rows.
-$includeDeleted = $user['role'] === 'admin' && ($_GET['include_deleted'] ?? '') === '1';
+$includeDeleted = isAdminOrAbove($user) && ($_GET['include_deleted'] ?? '') === '1';
 $deletedClause = $includeDeleted ? '' : 'WHERE is_deleted = 0';
 
 $sessions = $db->query("SELECT * FROM sessions $deletedClause ORDER BY session_date ASC, session_time_24h ASC")->fetchAll();

@@ -13,23 +13,37 @@ a zip → Extract is faster and safer than FTP for a few hundred small files.
 Directory layout must be preserved: `api/`, `admin/`, `includes/`, `js/`,
 `css/`, `database/`, `uploads/` all sit beside `index.php`.
 
+The public landing page is `index.html`; the staff sign-in form remains at
+`index.php`. The included `.htaccess` sets `index.html` as the directory
+index.
+
 ## 2. Create the database
 
 Control panel → MySQL Databases → create a database and a user, and **grant
 that user all privileges on that database**. Hosts prefix both names
 (`u123456_legislative`), which is why `root`/blank from XAMPP will not work.
 
-Open phpMyAdmin from the panel, select the new database, Import →
-`database/schema.sql` → Go. Then import, in order:
+For a new database, open phpMyAdmin from the panel, select the new database,
+Import → `database/schema.sql` → Go.
+
+For a **new** database, `schema.sql` is the complete deployment schema; do
+not run the additive migrations below afterward.
+
+For an **existing** database, do **not** re-import `schema.sql` because it
+contains destructive `DROP TABLE` statements. Keep the data and run the
+additive migrations in order:
 
 1. `database/migration_add_deadline_assignment.sql`
 2. `database/migration_add_evidence_and_session_completion.sql`
 3. `database/migration_round6_stakeholder_user_link.sql`
 4. `database/migration_round7_security.sql`
+5. `database/migration_round8_mfa_and_accounts.sql`
+6. `database/migration_round9_mayor_action_evidence.sql`
 
-`schema.sql` already contains everything up to round 6, so on a **fresh**
-import you only need `schema.sql` and round 7. Run the earlier ones only if
-you are upgrading a database that already holds data.
+The fresh schema includes the MFA, lockout, trusted-device, account-request,
+evidence, and session-completion structures. During an upgrade, round 7
+supplies the lockout columns and round 8 supplies MFA plus trusted-device
+support; do not apply those duplicate-column migrations to a fresh import.
 
 ## 3. Configure
 

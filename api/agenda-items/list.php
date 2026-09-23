@@ -12,11 +12,30 @@ $includeArchived = isset($_GET['include_archived']) && $_GET['include_archived']
 
 $db = getDb();
 
-$sql = "SELECT * FROM agenda_items";
+$sql = "SELECT ai.*,
+               EXISTS (
+                   SELECT 1
+                   FROM session_agenda_items sai
+                   JOIN sessions s ON s.id = sai.session_id
+                   WHERE sai.agenda_item_id = ai.id
+                     AND s.is_deleted = 0
+                     AND s.status IN ('Scheduled', 'Rescheduled')
+               ) AS has_active_schedule,
+               EXISTS (
+                   SELECT 1
+                   FROM session_agenda_items sai
+                   JOIN sessions s ON s.id = sai.session_id
+                   WHERE sai.agenda_item_id = ai.id
+                     AND (
+                         s.status IN ('Completed', 'Cancelled')
+                         OR s.is_deleted = 1
+                     )
+               ) AS has_finished_schedule
+        FROM agenda_items ai";
 if (!$includeArchived) {
-    $sql .= " WHERE is_archived = 0";
+    $sql .= " WHERE ai.is_archived = 0";
 }
-$sql .= " ORDER BY date_filed DESC";
+$sql .= " ORDER BY ai.date_filed DESC";
 
 $items = $db->query($sql)->fetchAll();
 

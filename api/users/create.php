@@ -18,7 +18,15 @@ $password = $b['password'] ?? '';
 $fullName = trim($b['full_name'] ?? '');
 $email    = trim($b['email'] ?? '');
 $role     = $b['role'] ?? '';
-$mfa      = array_key_exists('mfa_enabled', $b) ? (!empty($b['mfa_enabled']) ? 1 : 0) : ($role === 'admin' ? 1 : 0);
+$mfa      = array_key_exists('mfa_enabled', $b)
+    ? (!empty($b['mfa_enabled']) ? 1 : 0)
+    : (in_array($role, ['admin', 'superadmin'], true) ? 1 : 0);
+
+// Keep the MFA policy server-side. A caller must not be able to create an
+// admin-level account without the second factor simply by sending 0.
+if (defined('MFA_REQUIRED_FOR_ADMINS') && MFA_REQUIRED_FOR_ADMINS && in_array($role, ['admin', 'superadmin'], true)) {
+    $mfa = 1;
+}
 
 $errors = [];
 if (!preg_match('/^[a-zA-Z0-9._]{3,50}$/', $username)) {
@@ -32,8 +40,11 @@ if ($fullName === '') {
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     $errors[] = 'A valid email address is required.';
 }
-if (!in_array($role, ['admin', 'staff'], true)) {
-    $errors[] = 'Role must be admin or staff.';
+if (!in_array($role, ['superadmin', 'admin', 'staff'], true)) {
+    $errors[] = 'Role must be superadmin, admin, or staff.';
+}
+if (in_array($role, ['superadmin', 'admin'], true) && $user['role'] !== 'superadmin') {
+    jsonError('Only a superadmin can create an admin-level account.', 403);
 }
 if ($problem = passwordPolicyError($password, ['username' => $username, 'email' => $email])) {
     $errors[] = $problem;

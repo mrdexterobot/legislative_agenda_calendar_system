@@ -41,15 +41,24 @@ if ($req['status'] !== 'pending') {
 if ((int) $req['user_id'] === (int) $admin['id']) {
     jsonError('You cannot review your own account request — ask another admin to handle it.', 403);
 }
+if (in_array($req['role'], ['admin', 'superadmin'], true) && $admin['role'] !== 'superadmin') {
+    jsonError('Only a superadmin can review a request for an admin-level account.', 403);
+}
 
 $db->beginTransaction();
 try {
     if ($action === 'approve') {
         if ($req['request_type'] === 'deactivation') {
-            if ($req['role'] === 'admin') {
-                $activeAdmins = (int) $db->query("SELECT COUNT(*) FROM users WHERE role = 'admin' AND is_active = 1")->fetchColumn();
-                if ($activeAdmins <= 1) {
-                    throw new RuntimeException('Cannot deactivate the last remaining admin account.');
+            if (in_array($req['role'], ['admin', 'superadmin'], true)) {
+                $activeAdminOrAbove = (int) $db->query("SELECT COUNT(*) FROM users WHERE role IN ('admin', 'superadmin') AND is_active = 1")->fetchColumn();
+                if ($activeAdminOrAbove <= 1) {
+                    throw new RuntimeException('Cannot deactivate the last remaining admin-level account.');
+                }
+                if ($req['role'] === 'superadmin') {
+                    $activeSuperadmins = (int) $db->query("SELECT COUNT(*) FROM users WHERE role = 'superadmin' AND is_active = 1")->fetchColumn();
+                    if ($activeSuperadmins <= 1) {
+                        throw new RuntimeException('Cannot deactivate the last remaining superadmin account.');
+                    }
                 }
             }
             $db->prepare('UPDATE users SET is_active = 0 WHERE id = :id')->execute([':id' => $req['user_id']]);

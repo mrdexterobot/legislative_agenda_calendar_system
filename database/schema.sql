@@ -26,7 +26,8 @@ SET FOREIGN_KEY_CHECKS = 0;
 
 -- ----------------------------------------------------------------------------
 -- users
--- Two roles only, per current scope: admin (manages accounts + full data
+-- Three roles: superadmin (can manage admin-level accounts), admin (manages
+-- accounts + full data control), and staff.
 -- control) and staff (covers both SP Secretary/legislative staff and
 -- councilors reviewing priority — a single login-holding role for this
 -- capstone; individual councilors are represented as free-text references
@@ -43,8 +44,14 @@ CREATE TABLE users (
     -- notifications — previously nothing on this table could identify an
     -- email address at all.
     email         VARCHAR(255) NOT NULL UNIQUE,
-    role          ENUM('admin', 'staff') NOT NULL DEFAULT 'staff',
+    role          ENUM('superadmin', 'admin', 'staff') NOT NULL DEFAULT 'staff',
+    -- Admins require MFA by policy; staff can be enabled per account.
+    mfa_enabled   TINYINT(1) NOT NULL DEFAULT 0,
     is_active     TINYINT(1) NOT NULL DEFAULT 1,
+    -- Persistent counters prevent an attacker from bypassing lockout by
+    -- discarding the browser session between password attempts.
+    failed_login_attempts INT NOT NULL DEFAULT 0,
+    locked_until  TIMESTAMP NULL,
     created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -84,7 +91,7 @@ CREATE TABLE agenda_items (
     -- dropdown with nothing backing it up — no note on how staff learned
     -- this (Backstopping Committee report, signed copy received, etc.),
     -- unlike every other "mark complete" action in this system. Mirrors
-    -- deadlines.completion_notes; an optional file goes through the same
+    -- deadlines.completion_notes; a supporting file goes through the same
     -- evidence_attachments table as deadlines/sessions (entity_type=
     -- 'agenda_item', entity_id=the ordinance/resolution id).
     mayor_action_notes        VARCHAR(500) NULL,
@@ -358,7 +365,7 @@ CREATE TABLE integration_tokens (
 
 -- ----------------------------------------------------------------------------
 -- evidence_attachments
--- Supporting file for a deadline or session completion (minutes
+-- Supporting file for a deadline, session completion, or Mayor-action
 -- excerpt, signed report, attendance sheet scan, etc). Generic across both
 -- entity types via entity_type+entity_id (a lightweight lookup table, not
 -- FK-bound to either parent — a strict FK can't point at "either of two
@@ -401,6 +408,46 @@ CREATE TABLE password_resets (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------------------------------------------------------
+-- mfa_codes
+-- Six-digit codes are emailed during sign-in. Only the SHA-256 hash is stored;
+-- the plaintext code exists only in the email and the user's memory.
+-- ----------------------------------------------------------------------------
+DROP TABLE IF EXISTS mfa_codes;
+CREATE TABLE mfa_codes (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT NOT NULL,
+    code_hash  VARCHAR(64) NOT NULL,
+    attempts   INT NOT NULL DEFAULT 0,
+    expires_at TIMESTAMP NOT NULL,
+    used_at    TIMESTAMP NULL,
+    ip_address VARCHAR(45) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_mfa_codes_user_created (user_id, created_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
+-- trusted_devices
+-- A remember-this-device cookie contains an opaque random token. Only its
+-- hash is stored here, so a database read does not immediately become a
+-- reusable MFA bypass. The password is still required on every sign-in.
+-- ----------------------------------------------------------------------------
+DROP TABLE IF EXISTS trusted_devices;
+CREATE TABLE trusted_devices (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    user_id       INT NOT NULL,
+    token_hash    CHAR(64) NOT NULL UNIQUE,
+    expires_at    TIMESTAMP NOT NULL,
+    last_used_at  TIMESTAMP NULL,
+    revoked_at    TIMESTAMP NULL,
+    ip_address    VARCHAR(45) NULL,
+    user_agent    VARCHAR(255) NULL,
+    created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_trusted_devices_user_active (user_id, revoked_at, expires_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
 -- account_requests
 -- Staff-submitted requests for an admin to review — info updates (name/
 -- email) and self-deactivation both go through here instead of being
@@ -413,6 +460,7 @@ CREATE TABLE account_requests (
     user_id              INT NOT NULL,
     requested_by         VARCHAR(255) NOT NULL,  -- denormalized snapshot, survives user deletion
     request_type         ENUM('info_update', 'deactivation') NOT NULL,
+    requested_username   VARCHAR(50) NULL,
     requested_full_name  VARCHAR(150) NULL,
     requested_email      VARCHAR(255) NULL,
     reason               VARCHAR(500) NOT NULL,
@@ -461,9 +509,9 @@ SET @today = CURDATE();
 -- Default admin + staff accounts.
 -- Password for BOTH accounts: "ChangeMe123!"  (bcrypt hash below)
 -- CHANGE THESE before deploying anywhere reachable outside your own machine.
-INSERT INTO users (username, password_hash, full_name, email, role) VALUES
-    ('admin',   '$2y$10$INEcwTrP/04S5NWcocnM7OCH2JS7hb4.6Bub03WXZE3RqoGkVCGo.', 'System Administrator', 'admin@sjdm.gov.ph', 'admin'),
-    ('rsantos', '$2y$10$INEcwTrP/04S5NWcocnM7OCH2JS7hb4.6Bub03WXZE3RqoGkVCGo.', 'Atty. R. Santos, Legislative Officer', 'rsantos@sjdm.gov.ph', 'staff');
+INSERT INTO users (username, password_hash, full_name, email, role, mfa_enabled) VALUES
+    ('admin',   '$2y$10$INEcwTrP/04S5NWcocnM7OCH2JS7hb4.6Bub03WXZE3RqoGkVCGo.', 'System Administrator', 'admin@sjdm.gov.ph', 'superadmin', 1),
+    ('rsantos', '$2y$10$INEcwTrP/04S5NWcocnM7OCH2JS7hb4.6Bub03WXZE3RqoGkVCGo.', 'Atty. R. Santos, Legislative Officer', 'rsantos@sjdm.gov.ph', 'staff', 0);
 
 -- Agenda items (mirrors data.js, dates shifted relative to @today)
 INSERT INTO agenda_items (id, title, item_type, committee, submitted_by, category, date_filed,

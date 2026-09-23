@@ -16,11 +16,20 @@ async function loadAgendaPrepPreview() {
   const pushBtn = document.getElementById("hub-push-agenda-btn");
   try {
     const items = await window.API.get("api/agenda-items/list.php");
-    // SELECTION FIX: only items that are actually eligible to push —
-    // confirmed, not yet transmitted, not already pushed — mirrors the
-    // exact rule api/integration/hub-push-agenda.php enforces server-side,
-    // so a checked box can never represent something the push will reject.
-    const eligible = items.filter(i => i.confirmed_priority && !i.transmitted_to_mayor_date && !i.ready_for_scheduling && !i.is_archived);
+    // Only items that are actually eligible to push are shown: confirmed,
+    // not transmitted, not past 3rd reading, and not already on an active
+    // schedule. Items from a finished schedule may be pushed again.
+    const eligible = items.filter(i => {
+      const passedThirdReading = (i.readings || []).some(r => r.stage === "3rd Reading — Passed");
+      const wasPreviouslyScheduled = Number(i.has_finished_schedule) === 1;
+      const hasActiveSchedule = Number(i.has_active_schedule) === 1;
+      return i.confirmed_priority
+        && !i.transmitted_to_mayor_date
+        && !i.is_archived
+        && !passedThirdReading
+        && !hasActiveSchedule
+        && (!i.ready_for_scheduling || wasPreviouslyScheduled);
+    });
 
     if (!eligible.length) {
       el.innerHTML = `<p class="text-xs text-slate-400">Nothing eligible to push right now — confirm a priority in Priority Setting first.</p>`;

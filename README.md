@@ -40,7 +40,7 @@ already does (it still monitors the Sec. 54 mayor's-action window — see
 
 | Username  | Password       | Role  |
 |-----------|----------------|-------|
-| `admin`   | `ChangeMe123!` | admin |
+| `admin`   | `ChangeMe123!` | superadmin |
 | `rsantos` | `ChangeMe123!` | staff |
 
 **Change these passwords** (or create your own accounts and deactivate

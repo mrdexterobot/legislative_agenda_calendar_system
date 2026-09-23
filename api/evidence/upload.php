@@ -1,7 +1,7 @@
 <?php
 /**
- * upload.php — accepts ONE optional evidence file (deadline completion,
- * session completion) via multipart/form-data. Kept generic across both
+ * upload.php — accepts ONE evidence file (deadline completion, session
+ * completion, or Mayor-action confirmation) via multipart/form-data. Kept generic across
  * entity types via (entity_type, entity_id) rather than a separate
  * endpoint per module, since the validation/storage logic is identical.
  *
@@ -38,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $entityType = $_POST['entity_type'] ?? '';
 $entityId   = trim($_POST['entity_id'] ?? '');
 
-if (!in_array($entityType, ['deadline', 'session'], true) || $entityId === '') {
-    jsonError('entity_type (deadline|session) and entity_id are required.', 400);
+if (!in_array($entityType, ['deadline', 'session', 'agenda_item'], true) || $entityId === '') {
+    jsonError('entity_type (deadline|session|agenda_item) and entity_id are required.', 400);
 }
 
 $db = getDb();
@@ -55,9 +55,18 @@ if ($entityType === 'deadline') {
     }
     $isAssignedToSomeoneElse = $entity['assigned_to_user_id'] !== null
         && (int) $entity['assigned_to_user_id'] !== (int) $user['id']
-        && $user['role'] !== 'admin';
+        && !isAdminOrAbove($user);
     if ($isAssignedToSomeoneElse) {
         jsonError('This deadline is assigned to ' . ($entity['assigned_to_name'] ?? 'another user') . '. Only they or an admin can attach evidence to it.', 403);
+    }
+} elseif ($entityType === 'agenda_item') {
+    if (!isAdminOrAbove($user)) {
+        jsonError('Only an administrator can attach Mayor-action evidence.', 403);
+    }
+    $stmt = $db->prepare('SELECT id FROM agenda_items WHERE id = :id AND is_archived = 0');
+    $stmt->execute([':id' => $entityId]);
+    if (!$stmt->fetch()) {
+        jsonError('Agenda item not found.', 404);
     }
 } else { // session — not per-user restricted, matches the shared calendar's existing access model
     $stmt = $db->prepare('SELECT id FROM sessions WHERE id = :id');

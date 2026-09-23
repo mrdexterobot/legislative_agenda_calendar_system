@@ -22,6 +22,9 @@ function getDb(): PDO {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
         ]);
+        // Authentication expirations and audit timestamps are UTC regardless
+        // of the hosting provider's server timezone.
+        $pdo->exec("SET time_zone = '+00:00'");
     } catch (PDOException $e) {
         http_response_code(500);
         header('Content-Type: application/json');

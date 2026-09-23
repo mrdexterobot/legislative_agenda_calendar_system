@@ -44,7 +44,7 @@ function renderShell() {
             <span>${item.label}</span>
           </a>
         `).join("")}
-        ${user.role === "admin" ? `
+        ${["admin", "superadmin"].includes(user.role) ? `
           <a href="${prefix}admin/index.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-md ${page === "admin" ? "active" : ""}">
             <i class="fa-solid fa-shield-halved fa-fw"></i>
             <span>Admin</span>

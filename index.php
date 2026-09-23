@@ -94,6 +94,11 @@ $notice = $noticeMap[$reason] ?? '';
               <input id="password" type="password" required autocomplete="current-password"
                 class="w-full border border-[--line-200] rounded-lg px-3 py-2.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-ink-700/30 focus:border-ink-700" />
             </div>
+            <label class="flex items-start gap-2 text-xs text-slate-600 cursor-pointer">
+              <input id="remember-device" type="checkbox" class="mt-0.5 accent-[--ink-800]" />
+              <span><span class="font-semibold">Remember this device for 30 days</span><br />
+                <span class="text-slate-500">After MFA succeeds, this browser will not ask for an email code each time.</span></span>
+            </label>
             <p id="login-error" class="hidden text-xs text-maroon-700"><i class="fa-solid fa-triangle-exclamation mr-1"></i><span id="login-error-text"></span></p>
             <button type="submit" id="login-btn" class="btn-primary w-full flex items-center justify-center gap-2">
               <span id="login-btn-text">Sign in</span> <i class="fa-solid fa-arrow-right text-xs"></i>
@@ -162,7 +167,12 @@ $notice = $noticeMap[$reason] ?? '';
       const res = await fetch("api/auth/login.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        credentials: "same-origin",
+        body: JSON.stringify({
+          username,
+          password,
+          remember_device: document.getElementById("remember-device").checked,
+        }),
       });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || "Sign in failed.");
@@ -201,6 +211,7 @@ $notice = $noticeMap[$reason] ?? '';
       const res = await fetch("api/auth/verify-mfa.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ code }),
       });
       const json = await res.json();
@@ -220,7 +231,11 @@ $notice = $noticeMap[$reason] ?? '';
     errorEl.classList.add("hidden");
     noticeEl.classList.add("hidden");
     try {
-      const res = await fetch("api/auth/resend-mfa.php", { method: "POST", headers: { "Content-Type": "application/json" } });
+      const res = await fetch("api/auth/resend-mfa.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+      });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json.error || "Could not send a new code.");
       noticeEl.textContent = "A new code is on its way. The previous one no longer works.";

@@ -46,7 +46,7 @@ function checkSessionConflicts(PDO $db, string $date, string $time24h, string $v
 
     $sql = "SELECT id, session_time, session_time_24h, session_type, venue, committee, presiding_officer
             FROM sessions
-            WHERE session_date = :date AND status IN ('Scheduled', 'Rescheduled')";
+            WHERE session_date = :date AND status IN ('Scheduled', 'Rescheduled') AND is_deleted = 0";
     $params = [':date' => $date];
 
     if ($excludeSessionId) {

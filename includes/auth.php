@@ -33,11 +33,13 @@ if (!defined('SESSION_IDLE_MINUTES')) {
 }
 
 if (session_status() === PHP_SESSION_NONE) {
+    $sessionPath = appBasePath();
+    $sessionPath = $sessionPath === '' ? '/' : rtrim($sessionPath, '/') . '/';
     session_set_cookie_params([
         'lifetime' => 0,
-        'path'     => '/',
-        'secure'   => !APP_IS_LOCAL, // requires HTTPS once deployed; off for localhost testing
-        'httponly' => true,          // JS can't read the session cookie (mitigates XSS session theft)
+        'path'     => $sessionPath,
+        'secure'   => !APP_IS_LOCAL,
+        'httponly' => true,
         'samesite' => 'Lax',
     ]);
     session_start();
@@ -54,7 +56,14 @@ function enforceIdleTimeout(): bool {
         $_SESSION = [];
         if (ini_get('session.use_cookies')) {
             $params = session_get_cookie_params();
-            setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+            setcookie(session_name(), '', [
+                'expires'  => 1,
+                'path'     => $params['path'],
+                'domain'   => $params['domain'],
+                'secure'   => $params['secure'],
+                'httponly' => $params['httponly'],
+                'samesite' => $params['samesite'] ?? 'Lax',
+            ]);
         }
         session_destroy();
         return true;
@@ -89,10 +98,23 @@ function requireApiAuth(): array {
     return $user;
 }
 
+/** Does $actual satisfy a check that asks for $required? */
+function roleSatisfies(string $actual, string $required): bool {
+    if ($actual === $required) {
+        return true;
+    }
+    return $actual === 'superadmin' && $required === 'admin';
+}
+
+/** True for either admin-level role. */
+function isAdminOrAbove(?array $user): bool {
+    return in_array($user['role'] ?? '', ['admin', 'superadmin'], true);
+}
+
 /** For API endpoints: stop with a 403 JSON response if role doesn't match. */
 function requireApiRole(string $role): array {
     $user = requireApiAuth();
-    if ($user['role'] !== $role) {
+    if (!roleSatisfies($user['role'], $role)) {
         jsonError('You do not have permission to do that.', 403);
     }
     return $user;
@@ -115,7 +137,7 @@ function requirePageAuth(): array {
 /** For .php pages: redirect non-admins away from admin-only pages. */
 function requirePageRole(string $role): array {
     $user = requirePageAuth();
-    if ($user['role'] !== $role) {
+    if (!roleSatisfies($user['role'], $role)) {
         header('Location: ' . appBasePath() . '/dashboard.php?reason=not_authorized');
         exit;
     }

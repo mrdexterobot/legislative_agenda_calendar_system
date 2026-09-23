@@ -33,7 +33,7 @@ if ((time() - (int) $pending['started_at']) > (MFA_CODE_TTL_MINUTES * 60)) {
 
 $b = getJsonBody();
 $code = trim($b['code'] ?? '');
-if ($code === '') {
+if (!preg_match('/\A\d{6}\z/D', $code)) {
     jsonError('Enter the 6-digit code sent to your email.', 400);
 }
 
@@ -53,6 +53,19 @@ if (!$result['ok']) {
     jsonError($result['error'], 401);
 }
 
+$trustedDeviceCreated = false;
+if (!empty($pending['remember_device'])) {
+    try {
+        rememberTrustedDevice((int) $user['id']);
+        $trustedDeviceCreated = true;
+    } catch (Throwable $e) {
+        // The MFA challenge has already succeeded. Do not turn a temporary
+        // token-storage problem into a failed login; simply require the code
+        // again next time and leave the error in the server log.
+        error_log('Trusted-device storage error: ' . $e->getMessage());
+    }
+}
+
 $sessionUser = establishUserSession($user);
 $csrfToken = generateCsrfToken();
 logAudit('login_success', 'user', $user['username'], 'Signed in with a second factor');
@@ -60,4 +73,5 @@ logAudit('login_success', 'user', $user['username'], 'Signed in with a second fa
 jsonSuccess([
     'user'       => $sessionUser,
     'csrf_token' => $csrfToken,
+    'trusted_device' => $trustedDeviceCreated,
 ]);

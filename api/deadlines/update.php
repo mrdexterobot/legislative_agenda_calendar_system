@@ -31,7 +31,7 @@ if ($existing['is_deleted']) {
     jsonError('This deadline has been removed — restore it first (admin only) before making changes.', 409);
 }
 
-$isAdmin = $user['role'] === 'admin';
+$isAdmin = isAdminOrAbove($user);
 $isAssignedToSomeoneElse = $existing['assigned_to_user_id'] !== null
     && (int) $existing['assigned_to_user_id'] !== (int) $user['id']
     && !$isAdmin;

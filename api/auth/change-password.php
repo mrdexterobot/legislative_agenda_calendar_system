@@ -4,6 +4,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/csrf.php';
 require_once __DIR__ . '/../../includes/audit.php';
 require_once __DIR__ . '/../../includes/password_policy.php';
+require_once __DIR__ . '/../../includes/mfa.php';
 
 $user = requireApiAuth();
 requireCsrfToken();
@@ -35,8 +36,19 @@ if (password_verify($newPassword, $row['password_hash'])) {
     jsonError('That is the password you are already using. Choose a different one.', 422);
 }
 
-$db->prepare('UPDATE users SET password_hash = :hash WHERE id = :id')
-   ->execute([':hash' => password_hash($newPassword, PASSWORD_BCRYPT), ':id' => $user['id']]);
+$db->beginTransaction();
+try {
+    $db->prepare('UPDATE users SET password_hash = :hash WHERE id = :id')
+        ->execute([':hash' => password_hash($newPassword, PASSWORD_BCRYPT), ':id' => $user['id']]);
+    revokeAllTrustedDevices((int) $user['id']);
+    $db->commit();
+} catch (Throwable $e) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
+    error_log('Failed to change password: ' . $e->getMessage());
+    jsonError('Could not update the password. Please try again.', 500);
+}
 
 logAudit('change_password', 'user', $user['username'], 'Changed own password from the profile page');
 

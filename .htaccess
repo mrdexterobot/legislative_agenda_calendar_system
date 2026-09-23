@@ -1,3 +1,7 @@
+# The public landing page is intentionally separate from index.php, which is
+# the staff sign-in page.
+DirectoryIndex index.html index.php
+
 # Block direct browser access to folders that should only ever be included
 # by PHP, never requested directly (defense in depth — includes/.htaccess
 # and database/.htaccess below do the same thing more specifically).

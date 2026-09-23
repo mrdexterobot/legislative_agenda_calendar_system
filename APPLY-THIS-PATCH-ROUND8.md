@@ -1,4 +1,4 @@
-# Patch round 8 — MFA, account management, notification fixes
+# Patch round 8 — MFA, trusted devices, account management, notification fixes
 
 Extract over your project folder. Paths already match. **Apply the round 7
 patch first** if you have not — this one builds on the lockout columns and
@@ -89,6 +89,12 @@ else's id and grind codes against an account they never authenticated to.
 Codes expire in 10 minutes, allow 5 attempts, and a new one invalidates the
 old.
 
+After a successful code verification, staff may select **Remember this device
+for 30 days**. The browser receives an HttpOnly, SameSite cookie containing a
+random token; only its hash is stored in `trusted_devices`. The password is
+still required on every sign-in, and the MFA code is still required on any
+browser without a valid unexpired token.
+
 ## Admin account editing
 
 The admin screen previously offered exactly two actions: create and
@@ -150,7 +156,7 @@ records the send if at least one message was accepted.
 database/migration_round8_mfa_and_accounts.sql
 includes/config.sample.php        includes/mfa.php
 includes/password_policy.php      includes/meeting_notice.php
-api/auth/login.php                api/auth/verify-mfa.php
+api/auth/login.php                api/auth/verify-mfa.php       api/auth/forget-device.php
 api/auth/resend-mfa.php           api/auth/forgot-password.php
 api/auth/reset-password.php       api/auth/change-password.php
 api/users/create.php              api/users/update.php           api/users/list.php

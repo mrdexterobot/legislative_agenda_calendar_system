@@ -36,11 +36,14 @@ if ($attachment['entity_type'] === 'deadline') {
     if ($deadline) {
         $isAssignedToSomeoneElse = $deadline['assigned_to_user_id'] !== null
             && (int) $deadline['assigned_to_user_id'] !== (int) $user['id']
-            && $user['role'] !== 'admin';
+            && !isAdminOrAbove($user);
         if ($isAssignedToSomeoneElse) {
             jsonError('This deadline is assigned to ' . ($deadline['assigned_to_name'] ?? 'another user') . '.', 403);
         }
     }
+}
+if ($attachment['entity_type'] === 'agenda_item' && !isAdminOrAbove($user)) {
+    jsonError('Only an administrator can download Mayor-action evidence.', 403);
 }
 
 $path = __DIR__ . '/../../uploads/evidence/' . $attachment['stored_filename'];

@@ -18,8 +18,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $entityType = $_GET['entity_type'] ?? '';
 $entityId   = trim($_GET['entity_id'] ?? '');
 
-if (!in_array($entityType, ['deadline', 'session'], true) || $entityId === '') {
-    jsonError('entity_type (deadline|session) and entity_id are required.', 400);
+if (!in_array($entityType, ['deadline', 'session', 'agenda_item'], true) || $entityId === '') {
+    jsonError('entity_type (deadline|session|agenda_item) and entity_id are required.', 400);
 }
 
 $db = getDb();
@@ -33,9 +33,19 @@ if ($entityType === 'deadline') {
     }
     $isAssignedToSomeoneElse = $entity['assigned_to_user_id'] !== null
         && (int) $entity['assigned_to_user_id'] !== (int) $user['id']
-        && $user['role'] !== 'admin';
+        && !isAdminOrAbove($user);
     if ($isAssignedToSomeoneElse) {
         jsonError('This deadline is assigned to ' . ($entity['assigned_to_name'] ?? 'another user') . '.', 403);
+    }
+}
+if ($entityType === 'agenda_item') {
+    if (!isAdminOrAbove($user)) {
+        jsonError('Only an administrator can view Mayor-action evidence.', 403);
+    }
+    $stmt = $db->prepare('SELECT id FROM agenda_items WHERE id = :id AND is_archived = 0');
+    $stmt->execute([':id' => $entityId]);
+    if (!$stmt->fetch()) {
+        jsonError('Agenda item not found.', 404);
     }
 }
 // sessions: no per-user restriction, same as the rest of Calendar Scheduling.

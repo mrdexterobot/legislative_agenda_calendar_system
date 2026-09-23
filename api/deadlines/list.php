@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 }
 
 $db = getDb();
-$isAdmin = $user['role'] === 'admin';
+$isAdmin = isAdminOrAbove($user);
 // RISK FIX: soft-deleted deadlines never show in the normal list for
 // anyone — only an admin explicitly asking for them (via the "Show
 // deleted" toggle in js/deadline-tracking.js) sees is_deleted=1 rows.

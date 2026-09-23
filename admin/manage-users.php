@@ -57,6 +57,9 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
               <select name="role" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm">
                 <option value="staff">Staff (councilor/legislative staff)</option>
                 <option value="admin">Admin</option>
+                <?php if ($currentUser['role'] === 'superadmin'): ?>
+                <option value="superadmin">Superadmin</option>
+                <?php endif; ?>
               </select></div>
             <div class="flex items-end">
               <label class="flex items-center gap-2 text-sm text-ink-800 pb-2">
