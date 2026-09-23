@@ -40,8 +40,8 @@ already does (it still monitors the Sec. 54 mayor's-action window — see
 
 | Username  | Password       | Role  |
 |-----------|----------------|-------|
-| `admin`   | `ChangeMe123!` | superadmin |
-| `rsantos` | `ChangeMe123!` | staff |
+| `admin`   | `!` | superadmin |
+| `rsantos` | `!` | staff |
 
 **Change these passwords** (or create your own accounts and deactivate
 these) before using this anywhere beyond your own machine — see
