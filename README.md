@@ -19,6 +19,7 @@ requirements before making an instance publicly accessible.
 - Optional AI-assisted priority and schedule suggestions
 - Optional integration endpoints for an external meeting-management system
 - Audit logging for important account and record changes
+- Superadmin-only audit-log review with bounded, rate-limited CSV export
 
 ## Requirements
 
@@ -87,8 +88,9 @@ features should not require real credentials for basic local development.
 
 For a new local database, import `database/schema.sql`. For an existing
 database, use the versioned migration files in `database/` in the documented
-order. Do not re-import a schema containing destructive statements into a
-database that contains data.
+order, including the audit-export migration when enabling that feature. Do
+not re-import a schema containing destructive statements into a database that
+contains data.
 
 ## Deployment checklist
 

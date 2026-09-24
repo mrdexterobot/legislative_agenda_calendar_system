@@ -39,6 +39,8 @@ additive migrations in order:
 4. `database/migration_round7_security.sql`
 5. `database/migration_round8_mfa_and_accounts.sql`
 6. `database/migration_round9_mayor_action_evidence.sql`
+7. `database/migration_round10_superadmin_bootstrap.sql`
+8. `database/migration_round11_audit_export.sql`
 
 The fresh schema includes the MFA, lockout, trusted-device, account-request,
 evidence, and session-completion structures. During an upgrade, round 7

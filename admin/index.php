@@ -67,6 +67,19 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
             <h3 class="text-sm font-semibold text-ink-900">Email Delivery Test</h3>
             <p class="text-xs text-slate-500 mt-1">Check SMTP and see the real error when a send fails.</p>
           </a>
+          <?php if ($currentUser['role'] === 'superadmin'): ?>
+          <a href="audit-logs.php" class="dossier-card accent-maroon p-4 hover:shadow-sm transition-shadow">
+            <i class="fa-solid fa-file-shield text-ink-700 mb-2"></i>
+            <h3 class="text-sm font-semibold text-ink-900">Audit Logs</h3>
+            <p class="text-xs text-slate-500 mt-1">Review safe activity fields and export bounded CSV records.</p>
+          </a>
+          <?php else: ?>
+          <div class="dossier-card accent-maroon p-4 opacity-60" title="Superadmin access required">
+            <i class="fa-solid fa-file-shield text-ink-700 mb-2"></i>
+            <h3 class="text-sm font-semibold text-ink-900">Audit Logs</h3>
+            <p class="text-xs text-slate-500 mt-1">Superadmin access required for audit-log review and export.</p>
+          </div>
+          <?php endif; ?>
         </div>
       </main>
     </div>

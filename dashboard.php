@@ -79,6 +79,13 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
               <h3 class="text-sm font-semibold text-ink-900">Deadline Tracking</h3>
               <p class="text-xs text-slate-500 mt-1">Statutory &amp; internal deadlines.</p>
             </a>
+            <?php if ($currentUser['role'] === 'superadmin'): ?>
+            <a href="admin/audit-logs.php" class="dossier-card accent-maroon p-4 hover:shadow-sm transition-shadow">
+              <i class="fa-solid fa-file-shield text-ink-700 mb-2"></i>
+              <h3 class="text-sm font-semibold text-ink-900">Audit Logs</h3>
+              <p class="text-xs text-slate-500 mt-1">Review safe activity fields and export bounded CSV records.</p>
+            </a>
+            <?php endif; ?>
           </div>
         </section>
 
@@ -88,7 +95,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
 
 <script src="js/api-client.js"></script>
 <script src="js/helpers.js"></script>
-<script src="js/nav.js"></script>
+<script src="js/nav.js?v=audit-logs"></script>
 <script src="js/dashboard.js"></script>
 </body>
 </html>

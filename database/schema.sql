@@ -349,6 +349,17 @@ CREATE TABLE audit_log (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE INDEX idx_audit_log_created_at ON audit_log (created_at, id);
+CREATE INDEX idx_audit_log_user_action_created ON audit_log (user_id, action, created_at);
+
+-- One row per superadmin for an atomic one-export-per-minute cooldown.
+DROP TABLE IF EXISTS audit_export_rate_limits;
+CREATE TABLE audit_export_rate_limits (
+    user_id         INT PRIMARY KEY,
+    last_export_at  DATETIME NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ----------------------------------------------------------------------------
 -- integration_tokens  (API keys for OTHER subsystems to pull our data —
 -- the "exposed but access-controlled" integration surface)

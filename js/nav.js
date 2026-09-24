@@ -45,9 +45,15 @@ function renderShell() {
           </a>
         `).join("")}
         ${["admin", "superadmin"].includes(user.role) ? `
-          <a href="${prefix}admin/index.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-md ${page === "admin" ? "active" : ""}">
+          <a href="${prefix}admin/index.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-md ${["admin", "audit"].includes(page) ? "active" : ""}">
             <i class="fa-solid fa-shield-halved fa-fw"></i>
             <span>Admin</span>
+          </a>
+        ` : ""}
+        ${user.role === "superadmin" ? `
+          <a href="${prefix}admin/audit-logs.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-md ${page === "audit" ? "active" : ""}">
+            <i class="fa-solid fa-file-shield fa-fw"></i>
+            <span>Audit Logs</span>
           </a>
         ` : ""}
         <a href="${prefix}profile.php" class="nav-link flex items-center gap-3 px-3 py-2.5 rounded-md ${page === "profile" ? "active" : ""}">
@@ -85,6 +91,7 @@ function renderShell() {
       deadline: "Deadline Tracking",
       hub: "Integration Hub",
       admin: "Admin",
+      audit: "Audit Logs",
       profile: "My Profile",
     };
     topbarEl.className = "flex items-center justify-between border-b border-[--line-200] bg-[#FBFAF5] px-8 py-4";
