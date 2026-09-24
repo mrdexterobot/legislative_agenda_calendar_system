@@ -15,36 +15,45 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
 
 
 // ---- Load env files if present in project root ----
-// Order matters: a local repo .env should override deployment-specific files,
-// but production hosts like HostForge often provide prod.env instead.
+// Production-specific overrides must win when present, otherwise a stale local
+// .env can point at an older database or credentials. We intentionally prefer
+// prod.env over .env for HostForge deployments, while still supporting local
+// development and older schema2.env layouts.
 $envFiles = [
-    dirname(__DIR__) . '/.env',
     dirname(__DIR__) . '/prod.env',
+    dirname(__DIR__) . '/.env',
     dirname(__DIR__) . '/schema2.env',
 ];
 foreach ($envFiles as $envFile) {
-    if (file_exists($envFile) && is_readable($envFile)) {
-        $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if ($line === '' || str_starts_with($line, '#')) {
-                continue;
+    if (!file_exists($envFile) || !is_readable($envFile)) {
+        continue;
+    }
+
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+        if (strpos($line, '=') !== false) {
+            list($key, $val) = explode('=', $line, 2);
+            $key = trim($key);
+            $val = trim($val);
+            if ((str_starts_with($val, '"') && str_ends_with($val, '"')) ||
+                (str_starts_with($val, "'") && str_ends_with($val, "'"))) {
+                $val = substr($val, 1, -1);
             }
-            if (strpos($line, '=') !== false) {
-                list($key, $val) = explode('=', $line, 2);
-                $key = trim($key);
-                $val = trim($val);
-                if ((str_starts_with($val, '"') && str_ends_with($val, '"')) ||
-                    (str_starts_with($val, "'") && str_ends_with($val, "'"))) {
-                    $val = substr($val, 1, -1);
-                }
-                if (getenv($key) === false) {
-                    putenv("{$key}={$val}");
-                    $_ENV[$key] = $val;
-                    $_SERVER[$key] = $val;
-                }
+            if (getenv($key) === false) {
+                putenv("{$key}={$val}");
+                $_ENV[$key] = $val;
+                $_SERVER[$key] = $val;
             }
         }
+    }
+
+    // Stop after the first recognized production override file so that a stale
+    // repo-local .env cannot silently replace a valid HostForge config.
+    if (basename($envFile) === 'prod.env') {
         break;
     }
 }
@@ -61,9 +70,9 @@ if ($dbUrl = getenv('DATABASE_URL')) {
 
 $dbHost = getenv('DB_HOST') ?: ($dbUrlParts['host'] ?? 'localhost');
 $dbPort = (int) (getenv('DB_PORT') ?: ($dbUrlParts['port'] ?? 3306));
-$dbName = getenv('DB_NAME') ?: getenv('DB_DATABASE') ?: (isset($dbUrlParts['path']) ? ltrim($dbUrlParts['path'], '/') : 'legislative_agenda_system');
-$dbUser = getenv('DB_USER') ?: getenv('DB_USERNAME') ?: ($dbUrlParts['user'] ?? 'root');
-$dbPass = getenv('DB_PASS') ?: getenv('DB_PASSWORD') ?: ($dbUrlParts['pass'] ?? '');
+$dbName = getenv('DB_DATABASE') ?: getenv('DB_NAME') ?: (isset($dbUrlParts['path']) ? ltrim($dbUrlParts['path'], '/') : 'legislative_agenda_system');
+$dbUser = getenv('DB_USERNAME') ?: getenv('DB_USER') ?: ($dbUrlParts['user'] ?? 'root');
+$dbPass = getenv('DB_PASSWORD') ?: getenv('DB_PASS') ?: ($dbUrlParts['pass'] ?? '');
 
 define('DB_HOST', $dbHost);
 define('DB_PORT', $dbPort);
