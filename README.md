@@ -1,123 +1,131 @@
 # Legislative Agenda & Calendar Management System
 
-A working PHP + MySQL backend for the Priority Setting, Calendar Scheduling,
-Meeting Coordination, and Deadline Tracking modules — Sangguniang Panlungsod
-of San Jose del Monte, Bulacan (capstone build).
+A PHP and MySQL application for managing legislative agenda preparation,
+priority setting, calendar scheduling, meeting coordination, and deadline
+tracking.
 
-**Scope note:** the Executive–Legislative Synchronization module from the
-original five-module plan is not included here. There's no automatable
-data channel for executive-side status (mayor transmittal/signature/veto)
-independent of the Backstopping Committee's manual process, so a dedicated
-sync module wouldn't add real automation value over what Deadline Tracking
-already does (it still monitors the Sec. 54 mayor's-action window — see
-"Where the mayor's-action window lives" below).
+This repository is suitable for local development and demonstration. It is
+not a production-ready deployment by itself; review the security and hosting
+requirements before making an instance publicly accessible.
 
----
+## Features
 
-## 1. Setup for local testing (XAMPP)
+- Agenda item creation, readings, prioritization, archiving, and status tracking
+- Session calendar and deadline management
+- Meeting coordination, stakeholder notifications, and checklists
+- Role-based administration and account deactivation
+- Multi-factor authentication and password-reset flows
+- Evidence upload and controlled download endpoints
+- Optional AI-assisted priority and schedule suggestions
+- Optional integration endpoints for an external meeting-management system
+- Audit logging for important account and record changes
 
-1. **Install XAMPP** if you haven't (apachefriends.org) and start **Apache**
-   and **MySQL** from the XAMPP Control Panel.
-2. **Copy this whole folder** into `C:\xampp\htdocs\` (Windows) or
-   `/Applications/XAMPP/htdocs/` (Mac), so you end up with e.g.
+## Requirements
+
+- PHP 8.0 or later
+- MySQL 8.0 or compatible MariaDB version
+- Apache with URL rewriting enabled, or an equivalent PHP web server
+- PHP extensions used by the project, including PDO MySQL and cURL
+
+Docker support is included for a quick local setup. XAMPP is also supported.
+
+## Quick start with Docker
+
+1. Clone this repository.
+2. Create a local `.env` file from the variable names documented in
+   `includes/config.sample.php`.
+3. Replace every placeholder value in `.env`, especially database passwords,
+   `APP_SECRET`, API keys, and SMTP credentials.
+4. Start the application:
+
+   ```bash
+   docker compose up --build
+   ```
+
+5. Open `http://localhost:8080`.
+
+The database container imports `database/schema.sql` when its data volume is
+created for the first time. To rebuild the database from scratch during local
+development, remove only the project Compose volume after confirming that no
+data is needed.
+
+Never commit `.env` or any file containing real credentials. The repository's
+`.gitignore` excludes `.env` and the runtime PHP configuration.
+
+## Local setup with XAMPP
+
+1. Install XAMPP and start Apache and MySQL.
+2. Copy the project into the XAMPP web root, such as
    `C:\xampp\htdocs\legislative-agenda-system\`.
-3. **Create the database:**
-   - Open `http://localhost/phpmyadmin`
-   - Click "New", name it `legislative_agenda_system`, click Create
-   - Select it, click the "Import" tab, choose `database/schema.sql`, click Go
-   - You should see 11 tables created and some sample data inserted
-4. **Set up your config file:**
-   - Copy `includes/config.sample.php` to `includes/config.php`
-   - The defaults (`DB_USER = 'root'`, `DB_PASS = ''`) already match XAMPP's
-     out-of-the-box MySQL setup, so you likely don't need to change those
-   - Paste your **own, freshly-generated** Groq API key into `GROQ_API_KEY`
-     (see the "AI setup" section below — and never paste a real key into a
-     chat or commit it to GitHub; regenerate immediately if you ever do)
-5. **Open** `http://localhost/legislative-agenda-system/index.php` in your
-   browser.
+3. Create a database and import `database/schema.sql` using phpMyAdmin.
+4. Copy `includes/config.sample.php` to `includes/config.php`.
+5. Set the database connection and application settings in
+   `includes/config.php`. Keep this file outside version control.
+6. Open the project URL in a browser, for example
+   `http://localhost/legislative-agenda-system/`.
 
-### Default accounts (from the sample data)
+The schema may contain demonstration records and accounts. Treat them as
+local-only seed data: change all passwords and email addresses before using
+the application outside a private development machine, and do not publish
+those credentials in documentation.
 
-| Username  | Password       | Role  |
-|-----------|----------------|-------|
-| `admin`   | `!` | superadmin |
-| `rsantos` | `!` | staff |
+## Configuration
 
-**Change these passwords** (or create your own accounts and deactivate
-these) before using this anywhere beyond your own machine — see
-Admin → Manage User Accounts once logged in as `admin`.
+Configuration can be supplied through environment variables or the ignored
+`includes/config.php` file. Common settings include:
 
-### AI setup (Groq)
+- `DB_HOST`, `DB_NAME`, `DB_USER`, and `DB_PASS`
+- `APP_SECRET` — a long, randomly generated secret
+- `APP_IS_LOCAL` — use `false` only when HTTPS is correctly configured
+- `GROQ_API_KEY` and `GROQ_MODEL` — optional AI integration settings
+- SMTP settings for email delivery, if notifications are enabled
 
-1. Get a free API key at `https://console.groq.com` → API Keys.
-2. Paste it into `includes/config.php` as `GROQ_API_KEY`.
-3. The model is currently `openai/gpt-oss-20b` (see `GROQ_MODEL` in
-   config.php) — Groq's actual Llama models were moved off the free tier
-   in June 2026. If your thesis title/docs commit specifically to
-   "LLaMA-Powered," this is worth revisiting with your group — see the
-   note in Chapter 1 alignment below.
-4. Free tier limits: 30 requests/min, 1,000 requests/day, 8,000 tokens/min,
-   200,000 tokens/day (resets daily). The "Generate AI suggestion" button
-   is deliberately click-triggered, not automatic, to stay well within this.
+The AI and email integrations are optional. The core agenda and calendar
+features should not require real credentials for basic local development.
 
----
+## Database changes
 
-## 2. Deploying to real hosting / a domain
+For a new local database, import `database/schema.sql`. For an existing
+database, use the versioned migration files in `database/` in the documented
+order. Do not re-import a schema containing destructive statements into a
+database that contains data.
 
-This is plain PHP + MySQL, so it runs on almost any shared host (Hostinger,
-InfinityFree, etc.) or a small VPS. Broad steps:
+## Deployment checklist
 
-1. **Upload the files** via FTP/File Manager to your host's web root
-   (often `public_html/` or similar).
-2. **Create a MySQL database** through your host's control panel (cPanel,
-   etc.) and import `database/schema.sql` the same way as step 3 above —
-   most hosts include phpMyAdmin.
-3. **Edit `includes/config.php`** with the real DB host/username/password/
-   database name your host gave you (usually NOT `root`/blank — hosts
-   issue their own credentials).
-4. **Enable HTTPS.** Most hosts offer a free Let's Encrypt SSL certificate
-   you can turn on from the control panel — do this before real use, since
-   login sessions and the AI API key are only meaningfully protected in
-   transit over HTTPS. Once it's on, you can uncomment the HSTS header line
-   in `.htaccess` and flip `APP_IS_LOCAL` to `false` in `config.php`.
-5. **Double-check `.htaccess` is being honored** — visit
-   `https://yourdomain.com/includes/config.php` in a browser; it should
-   show "Direct access not permitted" (this is enforced in PHP itself, not
-   just `.htaccess`, so it should hold even if your host's Apache config
-   differs from XAMPP's).
+Before deploying to a shared host or public domain:
 
----
+- Use HTTPS and enable secure session cookies.
+- Set unique database credentials and a strong `APP_SECRET`.
+- Remove or change all seeded account credentials.
+- Keep `includes/config.php`, `.env`, logs, and debug output out of GitHub.
+- Confirm that uploaded evidence files cannot be executed or directly
+  downloaded without authorization.
+- Verify that each administrative and data endpoint enforces authentication,
+  authorization, CSRF protection, and server-side validation.
+- Configure backups and test restoring them before relying on the system.
+- Review `docs/DEPLOYMENT.md` for the hosting procedure and verification steps.
 
-## 3. Known simplifications (documented on purpose, not oversights)
+Do not upload real personal data, API keys, SMTP passwords, database
+credentials, or production configuration to this repository.
 
-- **Email sending is simulated**, not real SMTP — see the comment block at
-  the top of `api/meetings/send-notifications.php`. Standing up a real
-  mail server is unreliable to test and out of scope for a capstone demo;
-  swapping in PHPMailer + real SMTP credentials later wouldn't require
-  changing anything else.
-- **The "other subsystem" (Session and Legislative Meeting Management
-  System) is mocked** — see `INTEGRATION.md`.
-- **Agenda items are archived, never hard-deleted**, through the app UI —
-  they're official legislative records. `is_archived` hides them from
-  normal views but keeps readings/priority history intact.
-- **User "deletion" is deactivation**, not a row delete — preserves the
-  audit trail (a deactivated account can't log in, but past actions still
-  show who did them).
-- **Completed sessions can't be edited or deleted** — they're historical
-  records once a session has actually happened.
-- **Conflict detection checks venue, committee, and presiding-officer
-  overlaps within our own sessions table only** — not individual
-  councilors' personal calendars (we have no visibility into that, and
-  live attendance/quorum tracking is a different subsystem's scope).
+## Known limitations
 
-## 4. Chapter 1 alignment still needed
+- Email delivery requires an SMTP provider; without one, notification flows
+  are limited to local testing or simulation.
+- External subsystem integration is represented by the integration endpoints
+  and stub documented in `INTEGRATION.md`.
+- Conflict detection is limited to records available inside this system; it
+  does not know about private calendars or attendance outside the application.
+- AI suggestions are advisory and must be reviewed by an authorized user.
 
-Two of your thesis document versions commit to "LLaMA-Powered" in the
-title with Meta AI citations; others (Chapter1_revised, the definition-of-
-terms doc) use generic "cloud-based LLM" language and note the specific
-provider "will be selected during development." Since Groq's free/developer
-tier no longer serves actual Llama models (moved to their own gpt-oss
-models in June 2026), this is worth a group decision: either chase a
-provider that still serves real Llama access for free, or align everyone
-on the generic-LLM framing that's already technically accurate and doesn't
-need revisiting if the provider changes again later.
+## Project documentation
+
+- [Deployment guide](docs/DEPLOYMENT.md)
+- [Integration notes](INTEGRATION.md)
+- [Database schema](database/schema.sql)
+- [Configuration template](includes/config.sample.php)
+
+## License
+
+No license has been declared yet. Add a `LICENSE` file before distributing
+this repository for reuse.
