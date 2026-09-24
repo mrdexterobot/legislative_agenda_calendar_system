@@ -14,9 +14,12 @@ if (basename($_SERVER['SCRIPT_FILENAME'] ?? '') === basename(__FILE__)) {
 }
 
 
-// ---- Load .env or schema2.env if present in project root ----
+// ---- Load env files if present in project root ----
+// Order matters: a local repo .env should override deployment-specific files,
+// but production hosts like HostForge often provide prod.env instead.
 $envFiles = [
     dirname(__DIR__) . '/.env',
+    dirname(__DIR__) . '/prod.env',
     dirname(__DIR__) . '/schema2.env',
 ];
 foreach ($envFiles as $envFile) {

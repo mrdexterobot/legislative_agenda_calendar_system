@@ -103,8 +103,9 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    // A missing migration must never turn into password-only authentication.
-    error_log('Login schema or database error: ' . $e->getMessage());
+    // Keep the real server-side failure visible in logs for production
+    // troubleshooting while still returning a generic client message.
+    error_log('Login error: ' . $e->getMessage() . '\n' . $e->getTraceAsString());
     jsonError('Sign-in is temporarily unavailable. Ask the administrator to verify the database schema.', 503);
 }
 
