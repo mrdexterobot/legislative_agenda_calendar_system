@@ -22,4 +22,12 @@ RUN mkdir -p /var/www/html/uploads/evidence \
     && chown -R www-data:www-data /var/www/html/uploads /var/www/html/includes \
     && chmod -R ug+rwX /var/www/html/uploads /var/www/html/includes
 
+# Allow .htaccess overrides and configure entrypoint
+RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf \
+    && cp /var/www/html/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 80
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["apache2-foreground"]
