@@ -45,13 +45,59 @@ async function renderDashboard() {
     ? recent_activity.map(a => `
         <div class="flex items-start gap-3 py-3">
           <div class="w-7 h-7 rounded-full bg-paper-100 flex items-center justify-center text-ink-700 text-xs shrink-0"><i class="fa-solid ${activityIcon(a.action)}"></i></div>
-          <div class="flex-1 min-w-0">
-            <p class="text-sm text-ink-900">${a.details || `${a.action} — ${a.entity_type} ${a.entity_id || ""}`}</p>
+          <div class="flex-1 min-w-0 overflow-hidden">
+            <p class="text-sm text-ink-900 break-words overflow-wrap-anywhere">${activitySummary(a)}</p>
             <p class="text-[11px] text-slate-500">${new Date(a.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
           </div>
         </div>
       `).join("")
     : `<p class="text-sm text-slate-400 p-4">No activity recorded yet.</p>`;
+}
+
+function activitySummary(a) {
+  const actor = a.username ? `by ${a.username}` : "";
+  const entityLabel = a.entity_id || "";
+
+  // If details is raw JSON, parse it and summarize the changed fields instead
+  // of dumping the whole raw blob into the card.
+  if (a.details && a.details.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(a.details);
+      const keys = Object.keys(parsed).filter(k => k !== "item_id" && k !== "id");
+      const changedFields = keys.length ? keys.join(", ").replace(/_/g, " ") : "";
+      const refId = parsed.item_id || parsed.id || entityLabel;
+      const actionLabel = activityActionLabel(a.action);
+      if (changedFields) {
+        return `${actionLabel} ${actor}: ${refId} — ${changedFields}`;
+      }
+      return `${actionLabel} ${actor}: ${refId}`;
+    } catch (e) {
+      // Fall through to text truncation
+    }
+  }
+
+  if (a.details) {
+    const maxLen = 120;
+    return a.details.length > maxLen ? a.details.substring(0, maxLen) + "…" : a.details;
+  }
+
+  return `${activityActionLabel(a.action)} ${actor} — ${a.entity_type} ${entityLabel}`.trim();
+}
+
+function activityActionLabel(action) {
+  const labels = {
+    confirm_priority: "Priority confirmed",
+    create: "Created",
+    update: "Updated",
+    archive: "Archived",
+    send_notifications: "Notifications sent",
+    update_mayor_status: "Mayor status updated",
+    login: "Signed in",
+    logout: "Signed out",
+    delete: "Deleted",
+    restore: "Restored",
+  };
+  return labels[action] || action.replace(/_/g, " ");
 }
 
 function activityIcon(action) {

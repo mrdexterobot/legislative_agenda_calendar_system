@@ -73,7 +73,7 @@ foreach ($upcomingSessions as &$s) {
 unset($s);
 
 $recentActivity = $db->query(
-    "SELECT action, entity_type, entity_id, details, created_at FROM audit_log
+    "SELECT username, action, entity_type, entity_id, details, created_at FROM audit_log
      WHERE action NOT LIKE 'login%' AND action != 'logout'
      ORDER BY created_at DESC LIMIT 8"
 )->fetchAll();
