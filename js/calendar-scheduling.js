@@ -222,17 +222,21 @@ document.getElementById("new-session-form")?.addEventListener("submit", async (e
   } catch (err) {
     if (err.status === 409 && err.data?.conflicts) {
       const { conflicts, alternatives } = err.data;
+      const regularSessionDayConflict = conflicts.some(c => c.includes("Only one Regular Session can be scheduled per day"));
       warningEl.innerHTML = `
         <p class="font-semibold mb-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Scheduling conflict detected:</p>
         <ul class="list-disc list-inside mb-2">${conflicts.map(c => `<li>${c}</li>`).join("")}</ul>
-        ${alternatives.length ? `<p>Available times at this venue: <strong>${alternatives.join(", ")}</strong></p>` : `<p>No open slots found that day at this venue between 8 AM–5 PM.</p>`}
-        <label class="flex items-center gap-2 mt-2">
-          <input type="checkbox" id="override-conflict-check" class="rounded" /> Replace the conflicting schedule(s) (they will be marked Cancelled and kept in history)
-        </label>
+        ${alternatives.length ? `<p>Available times at this venue: <strong>${alternatives.join(", ")}</strong></p>` : regularSessionDayConflict ? `<p>A second Regular Session cannot be scheduled on the same day.</p>` : `<p>No open slots found that day at this venue between 8 AM–5 PM.</p>`}
+        ${err.data.can_replace === false
+          ? `<p class="mt-2 font-semibold">A completed Regular Session cannot be replaced. Choose another date.</p>`
+          : `<label class="flex items-center gap-2 mt-2">
+              <input type="checkbox" id="override-conflict-check" class="rounded" /> Replace the conflicting schedule(s) (they will be marked Cancelled and kept in history)
+            </label>`}
       `;
       warningEl.classList.remove("hidden");
 
-      document.getElementById("override-conflict-check").addEventListener("change", async (ev) => {
+      const overrideCheck = document.getElementById("override-conflict-check");
+      if (overrideCheck) overrideCheck.addEventListener("change", async (ev) => {
         if (!ev.target.checked) return;
         payload.override_conflicts = true;
         try {
@@ -563,7 +567,7 @@ document.getElementById("ai-schedule-btn")?.addEventListener("click", async () =
         ${result.suggestions.map(s => `
           <div class="flex items-start justify-between gap-3 border border-[--line-200] rounded-lg bg-white p-2">
             <p><strong>${escapeHtml(fmtDate(s.date))} at ${escapeHtml(s.time)}</strong><br><span class="text-slate-600">${escapeHtml(s.reasoning)}</span></p>
-            <button type="button" data-use-schedule-date="${escapeHtml(s.date)}" data-use-schedule-time="${escapeHtml(s.time)}" class="btn-outline text-[11px] !py-1 !px-2 whitespace-nowrap">Use date</button>
+            <button type="button" data-use-schedule-date="${escapeHtml(s.date)}" data-use-schedule-time="${escapeHtml(s.time_value)}" class="btn-outline text-[11px] !py-1 !px-2 whitespace-nowrap">Use date</button>
           </div>
         `).join("")}
       </div>

@@ -251,14 +251,17 @@ function closeCompleteDeadlineModal() {
   document.getElementById("complete-modal-root").innerHTML = "";
 }
 
-async function loadDeadlineAssigneeOptions() {
-  const select = document.getElementById("new-deadline-assignee");
+async function loadDeadlineAgendaItemOptions() {
+  const select = document.getElementById("new-deadline-related-item");
   if (!select) return;
   try {
-    const users = await window.API.get("api/users/list-active.php");
-    select.innerHTML = `<option value="">Unassigned</option>` + users.map(u => `<option value="${u.id}">${u.full_name}</option>`).join("");
+    const items = await window.API.get("api/agenda-items/list.php");
+    select.replaceChildren(new Option("Not linked to an agenda item", ""));
+    items.forEach(item => {
+      select.add(new Option(`${item.id} — ${item.title}`, item.id));
+    });
   } catch (err) {
-    select.innerHTML = `<option value="">Unassigned</option>`;
+    select.replaceChildren(new Option("Could not load agenda items", ""));
   }
 }
 
@@ -284,7 +287,7 @@ document.getElementById("new-deadline-form")?.addEventListener("submit", async (
 
 document.addEventListener("DOMContentLoaded", () => {
   renderDeadlineModule();
-  loadDeadlineAssigneeOptions();
+  loadDeadlineAgendaItemOptions();
   document.getElementById("reminder-lead").addEventListener("change", e => {
     reminderLeadDays = parseInt(e.target.value, 10) || 3;
     renderDeadlineModule();

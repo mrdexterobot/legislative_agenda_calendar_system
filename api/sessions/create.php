@@ -16,7 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $b = getJsonBody();
 
 $date             = $b['date'] ?? '';
-$timeDisplay      = trim($b['time'] ?? '');       // e.g. "9:00 AM" — what the UI shows
+$timeInput        = trim($b['time'] ?? '');
+$timeDisplay      = '';
 $sessionType      = $b['type'] ?? '';
 $venue            = trim($b['venue'] ?? '');
 $presidingOfficer = trim($b['presiding_officer'] ?? '') ?: 'TBD';
@@ -30,12 +31,23 @@ $errors = [];
 $dateObj = DateTime::createFromFormat('Y-m-d', $date);
 if (!$dateObj) $errors[] = 'A valid date is required.';
 $time24h = null;
-if ($timeDisplay !== '') {
-    $ts = strtotime($timeDisplay);
-    if ($ts === false) {
-        $errors[] = 'Time could not be understood — try a format like "9:00 AM".';
+if ($timeInput !== '') {
+    $timeObj = DateTime::createFromFormat('!H:i', $timeInput);
+    $timeErrors = DateTime::getLastErrors();
+    if ($timeObj && (!$timeErrors || ($timeErrors['warning_count'] === 0 && $timeErrors['error_count'] === 0))
+        && $timeObj->format('H:i') === $timeInput) {
+        $time24h = $timeObj->format('H:i:s');
+        $timeDisplay = $timeObj->format('g:i A');
     } else {
-        $time24h = date('H:i:s', $ts);
+        // Keep accepting the old display format for already-open pages and
+        // integrations while the form now submits the native HH:mm value.
+        $ts = strtotime($timeInput);
+        if ($ts === false) {
+            $errors[] = 'Enter a valid time.';
+        } else {
+            $time24h = date('H:i:s', $ts);
+            $timeDisplay = date('g:i A', $ts);
+        }
     }
 } else {
     $errors[] = 'Time is required.';
@@ -52,19 +64,6 @@ if ($errors) {
 
 $db = getDb();
 
-// ---- Conflict detection (venue / committee / presiding officer, same day) ----
-$conflictDetails = findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer);
-$conflicts = array_column($conflictDetails, 'description');
-
-if ($conflicts && !$forceOverride) {
-    $alternatives = suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer);
-    jsonError('Scheduling conflict detected.', 409, [
-        'conflicts'            => $conflicts,
-        'conflicting_sessions' => $conflictDetails,
-        'alternatives'         => $alternatives,
-    ]);
-}
-
 // ---- Validate referenced agenda items exist and aren't archived ----
 if ($agendaItemIds) {
     $placeholders = implode(',', array_fill(0, count($agendaItemIds), '?'));
@@ -77,6 +76,47 @@ if ($agendaItemIds) {
     }
 }
 
+// Serialize Regular Session scheduling per day so parallel requests cannot
+// both pass the one-plenary-session-per-day check.
+$scheduleLockName = null;
+if ($sessionType === 'Regular Session') {
+    $scheduleLockName = 'regular_session_date_' . $date;
+    $scheduleLock = $db->prepare('SELECT GET_LOCK(:lock_name, 10)');
+    $scheduleLock->execute([':lock_name' => $scheduleLockName]);
+    if ((int) $scheduleLock->fetchColumn() !== 1) {
+        jsonError('Could not reserve this date for the Regular Session. Please try again.', 503);
+    }
+}
+
+$conflictDetails = findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer, null, $sessionType);
+$conflicts = array_column($conflictDetails, 'description');
+$completedRegularConflict = $sessionType === 'Regular Session'
+    && array_filter($conflictDetails, static fn(array $conflict): bool => $conflict['status'] === 'Completed');
+
+if ($completedRegularConflict) {
+    if ($scheduleLockName !== null) {
+        $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $scheduleLockName]);
+    }
+    jsonError('A Regular Session has already been completed on this date; another cannot be scheduled.', 409, [
+        'conflicts' => $conflicts,
+        'conflicting_sessions' => $conflictDetails,
+        'alternatives' => [],
+        'can_replace' => false,
+    ]);
+}
+
+if ($conflicts && !$forceOverride) {
+    if ($scheduleLockName !== null) {
+        $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $scheduleLockName]);
+    }
+    $alternatives = suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer, 3, $sessionType);
+    jsonError('Scheduling conflict detected.', 409, [
+        'conflicts'            => $conflicts,
+        'conflicting_sessions' => $conflictDetails,
+        'alternatives'         => $alternatives,
+    ]);
+}
+
 $sessionId = 'SESS-' . strtoupper(bin2hex(random_bytes(3)));
 $replacedSessionIds = [];
 
@@ -84,11 +124,28 @@ $db->beginTransaction();
 try {
     // Recheck within the transaction. When the caller confirmed replacement,
     // cancel each active conflicting schedule and keep its row as history.
-    $conflictDetails = findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer);
+    $conflictDetails = findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer, null, $sessionType);
     $conflicts = array_column($conflictDetails, 'description');
+    $completedRegularConflict = $sessionType === 'Regular Session'
+        && array_filter($conflictDetails, static fn(array $conflict): bool => $conflict['status'] === 'Completed');
+    if ($completedRegularConflict) {
+        $db->rollBack();
+        if ($scheduleLockName !== null) {
+            $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $scheduleLockName]);
+        }
+        jsonError('A Regular Session has already been completed on this date; another cannot be scheduled.', 409, [
+            'conflicts' => $conflicts,
+            'conflicting_sessions' => $conflictDetails,
+            'alternatives' => [],
+            'can_replace' => false,
+        ]);
+    }
     if ($conflicts && !$forceOverride) {
         $db->rollBack();
-        $alternatives = suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer);
+        if ($scheduleLockName !== null) {
+            $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $scheduleLockName]);
+        }
+        $alternatives = suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer, 3, $sessionType);
         jsonError('Scheduling conflict detected.', 409, [
             'conflicts'            => $conflicts,
             'conflicting_sessions' => $conflictDetails,
@@ -206,10 +263,16 @@ try {
     }
 
     $db->commit();
-} catch (Exception $e) {
+} catch (Throwable $e) {
     $db->rollBack();
+    if ($scheduleLockName !== null) {
+        $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $scheduleLockName]);
+    }
     error_log('Failed to create session: ' . $e->getMessage());
     jsonError('Failed to save the session. Please try again.', 500);
+}
+if ($scheduleLockName !== null) {
+    $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $scheduleLockName]);
 }
 
 $auditNote = $replacedSessionIds

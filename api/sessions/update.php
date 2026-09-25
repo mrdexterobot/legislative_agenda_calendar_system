@@ -56,6 +56,11 @@ if ($timeChanged) {
 if (!in_array($status, ['Scheduled', 'Rescheduled', 'Completed', 'Cancelled'], true)) {
     jsonError('Invalid status.', 422);
 }
+// If a cancelled session is moved to a new time without an explicit status,
+// it becomes active again and must pass the same conflict checks.
+if ($timeChanged && !isset($b['status'])) {
+    $status = 'Rescheduled';
+}
 
 // EVIDENCE FIX: marking a session Completed used to be a bare status flip
 // with nothing backing it up — no record of what actually happened at the
@@ -97,19 +102,62 @@ if ($status === 'Completed') {
     }
 }
 
+$conflictDetails = [];
 $conflicts = [];
-if ($timeChanged) {
-    $conflicts = checkSessionConflicts($db, $date, $time24h, $venue, $committee, $presidingOfficer, $sessionId);
-    if ($conflicts && !$forceOverride) {
-        $alternatives = suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer);
-        jsonError('Scheduling conflict detected.', 409, ['conflicts' => $conflicts, 'alternatives' => $alternatives]);
+$replacedSessionIds = [];
+$scheduleLockNames = [];
+$releaseScheduleLocks = static function () use ($db, &$scheduleLockNames): void {
+    foreach ($scheduleLockNames as $lockName) {
+        $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $lockName]);
+    }
+    $scheduleLockNames = [];
+};
+$isActiveSchedule = in_array($status, ['Scheduled', 'Rescheduled'], true);
+$mustCheckRegularDay = $existing['session_type'] === 'Regular Session' && $status !== 'Cancelled';
+
+if ($mustCheckRegularDay) {
+    $datesToLock = [$date];
+    if (in_array($existing['status'], ['Scheduled', 'Rescheduled'], true)) {
+        $datesToLock[] = $existing['session_date'];
+    }
+    $datesToLock = array_values(array_unique($datesToLock));
+    sort($datesToLock, SORT_STRING);
+    $lockStatement = $db->prepare('SELECT GET_LOCK(:lock_name, 10)');
+    foreach ($datesToLock as $dateToLock) {
+        $lockName = 'regular_session_date_' . $dateToLock;
+        $lockStatement->execute([':lock_name' => $lockName]);
+        if ((int) $lockStatement->fetchColumn() !== 1) {
+            $releaseScheduleLocks();
+            jsonError('Could not reserve this date for the Regular Session. Please try again.', 503);
+        }
+        $scheduleLockNames[] = $lockName;
     }
 }
 
-// If the time/date/venue changed, mark as Rescheduled unless caller
-// explicitly set a different status.
-if ($timeChanged && !isset($b['status'])) {
-    $status = 'Rescheduled';
+if ($isActiveSchedule || $mustCheckRegularDay) {
+    $conflictDetails = findSessionConflictDetails(
+        $db, $date, $time24h, $venue, $committee, $presidingOfficer, $sessionId, $existing['session_type']
+    );
+    $conflicts = array_column($conflictDetails, 'description');
+    $completedRegularConflict = $mustCheckRegularDay
+        && array_filter($conflictDetails, static fn(array $conflict): bool => $conflict['status'] === 'Completed');
+    if ($completedRegularConflict || ($conflicts && (!$forceOverride || !$isActiveSchedule))) {
+        $releaseScheduleLocks();
+        $alternatives = $mustCheckRegularDay ? [] : suggestAlternativeTimes(
+            $db, $date, $venue, $committee, $presidingOfficer, 3, $existing['session_type']
+        );
+        jsonError($completedRegularConflict
+            ? 'A Regular Session has already been completed on this date; another cannot be scheduled.'
+            : 'Scheduling conflict detected.', 409, [
+            'conflicts' => $conflicts,
+            'conflicting_sessions' => $conflictDetails,
+            'alternatives' => $alternatives,
+            'can_replace' => $isActiveSchedule && !$completedRegularConflict,
+        ]);
+    }
+    if ($forceOverride && $isActiveSchedule) {
+        $replacedSessionIds = array_column($conflictDetails, 'session_id');
+    }
 }
 
 $fields = "session_date = :date, session_time = :time_display, session_time_24h = :time24h,
@@ -144,6 +192,7 @@ if ($completionNotes !== null) {
         $lockedSession = $lockSession->fetch();
         if (!$lockedSession || $lockedSession['status'] === 'Completed') {
             $db->rollBack();
+            $releaseScheduleLocks();
             jsonError('Completed sessions are historical records and cannot be edited.', 409);
         }
 
@@ -154,6 +203,7 @@ if ($completionNotes !== null) {
         $meeting = $meetingStmt->fetch();
         if (!$meeting || !$meeting['notifications_sent']) {
             $db->rollBack();
+            $releaseScheduleLocks();
             jsonError('Send the meeting notification from Meeting Coordination before marking this session Completed.', 409);
         }
 
@@ -169,6 +219,7 @@ if ($completionNotes !== null) {
         $unknownItems = array_diff(array_keys($readingStages), $attachedItemIds);
         if ($unknownItems) {
             $db->rollBack();
+            $releaseScheduleLocks();
             jsonError('Reading stages may only be supplied for agenda items attached to this session.', 422);
         }
 
@@ -239,17 +290,68 @@ if ($completionNotes !== null) {
         if ($db->inTransaction()) {
             $db->rollBack();
         }
+        $releaseScheduleLocks();
         error_log('Failed to complete session: ' . $e->getMessage());
         jsonError('Failed to complete the session. Please try again.', 500);
     }
 } else {
-    $db->prepare("UPDATE sessions SET $fields WHERE id = :id")->execute($params);
+    if ($isActiveSchedule) {
+        $db->beginTransaction();
+        try {
+            $conflictDetails = findSessionConflictDetails(
+                $db, $date, $time24h, $venue, $committee, $presidingOfficer, $sessionId, $existing['session_type']
+            );
+            $conflicts = array_column($conflictDetails, 'description');
+            $completedRegularConflict = $existing['session_type'] === 'Regular Session'
+                && array_filter($conflictDetails, static fn(array $conflict): bool => $conflict['status'] === 'Completed');
+            if ($completedRegularConflict || ($conflicts && !$forceOverride)) {
+                $db->rollBack();
+                $releaseScheduleLocks();
+                jsonError($completedRegularConflict
+                    ? 'A Regular Session has already been completed on this date; another cannot be scheduled.'
+                    : 'Scheduling conflict detected.', 409, [
+                    'conflicts' => $conflicts,
+                    'conflicting_sessions' => $conflictDetails,
+                    'alternatives' => $existing['session_type'] === 'Regular Session'
+                        ? []
+                        : suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer, 3, $existing['session_type']),
+                    'can_replace' => $isActiveSchedule && !$completedRegularConflict,
+                ]);
+            }
+
+            $replacedSessionIds = $forceOverride ? array_column($conflictDetails, 'session_id') : [];
+            if ($replacedSessionIds) {
+                $placeholders = implode(',', array_fill(0, count($replacedSessionIds), '?'));
+                $db->prepare(
+                    "UPDATE sessions SET status = 'Cancelled'
+                     WHERE id IN ($placeholders) AND status IN ('Scheduled', 'Rescheduled') AND is_deleted = 0"
+                )->execute($replacedSessionIds);
+            }
+            $db->prepare("UPDATE sessions SET $fields WHERE id = :id")->execute($params);
+            $db->commit();
+        } catch (Throwable $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            $releaseScheduleLocks();
+            error_log('Failed to replace conflicting schedule: ' . $e->getMessage());
+            jsonError('Failed to update the session. Please try again.', 500);
+        }
+    } else {
+        $db->prepare("UPDATE sessions SET $fields WHERE id = :id")->execute($params);
+    }
 }
 
+$releaseScheduleLocks();
+
 $note = $timeChanged ? "Rescheduled by {$user['full_name']}" : "Updated by {$user['full_name']}";
-if ($conflicts) $note .= ' (conflicts overridden: ' . implode(' | ', $conflicts) . ')';
+if ($replacedSessionIds) $note .= ' (replaced conflicting sessions: ' . implode(', ', $replacedSessionIds) . ')';
 if ($completionNotes !== null) $note .= " — marked Completed: $completionNotes";
 logAudit('update', 'session', $sessionId, $note);
+foreach ($replacedSessionIds as $replacedSessionId) {
+    logAudit('replace', 'session', $replacedSessionId,
+        "Cancelled after being replaced by {$sessionId}; action by {$user['full_name']}.");
+}
 
 jsonSuccess([
     'id'                   => $sessionId,

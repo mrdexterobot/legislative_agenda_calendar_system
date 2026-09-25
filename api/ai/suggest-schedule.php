@@ -38,13 +38,22 @@ if (!in_array($sessionType, ['Regular Session', 'Special Session', 'Committee He
 
 $committee = trim((string) ($body['committee'] ?? '')) ?: null;
 $presidingOfficer = trim((string) ($body['presiding_officer'] ?? '')) ?: 'TBD';
-$timeDisplay = trim((string) ($body['time'] ?? ''));
-$timeStamp = $timeDisplay !== '' ? strtotime($timeDisplay) : strtotime('09:00 AM');
-if ($timeStamp === false) {
-    jsonError('Time could not be understood. Try a format like "9:00 AM".', 422);
+$timeInput = trim((string) ($body['time'] ?? ''));
+$timeObj = DateTime::createFromFormat('!H:i', $timeInput);
+$timeErrors = DateTime::getLastErrors();
+if ($timeObj && (!$timeErrors || ($timeErrors['warning_count'] === 0 && $timeErrors['error_count'] === 0))
+    && $timeObj->format('H:i') === $timeInput) {
+    $time24h = $timeObj->format('H:i:s');
+    $normalizedTime = $timeObj->format('g:i A');
+} else {
+    // Accept the previous AM/PM payload while callers transition to time inputs.
+    $timeStamp = $timeInput !== '' ? strtotime($timeInput) : strtotime('09:00 AM');
+    if ($timeStamp === false) {
+        jsonError('Enter a valid time.', 422);
+    }
+    $time24h = date('H:i:s', $timeStamp);
+    $normalizedTime = date('g:i A', $timeStamp);
 }
-$time24h = date('H:i:s', $timeStamp);
-$normalizedTime = date('g:i A', $timeStamp);
 
 $dateFrom = trim((string) ($body['date_from'] ?? ''));
 if ($dateFrom === '') {
@@ -81,12 +90,13 @@ for ($candidateDate = $dateObject; $candidateDate <= $lastDate; $candidateDate =
     }
 
     $date = $candidateDate->format('Y-m-d');
-    $conflicts = checkSessionConflicts($db, $date, $time24h, $venue, $committee, $presidingOfficer);
+    $conflicts = checkSessionConflicts($db, $date, $time24h, $venue, $committee, $presidingOfficer, null, $sessionType);
     if (!$conflicts) {
         $candidateSlots[] = [
             'date'     => $date,
             'time'     => $normalizedTime,
             'time_24h' => $time24h,
+            'time_value' => substr($time24h, 0, 5),
         ];
     }
 }
@@ -118,6 +128,7 @@ $suggestions = array_map(static function (array $suggestion) use ($candidateByDa
     return [
         'date'      => $slot['date'],
         'time'      => $slot['time'],
+        'time_value' => $slot['time_value'],
         'reasoning' => $suggestion['reasoning'],
     ];
 }, $aiResult['suggestions']);

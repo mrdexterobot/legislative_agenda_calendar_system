@@ -72,13 +72,9 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
               <input name="due_date" type="date" required class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm" />
             </div>
             <div class="sm:col-span-2">
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Related agenda item ID <span class="font-normal text-slate-400">(optional, e.g. ORD-2026-014)</span></label>
-              <input name="related_item_id" placeholder="Leave blank if not tied to a specific item" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm font-mono" />
-            </div>
-            <div class="sm:col-span-2">
-              <label class="block text-xs font-semibold text-slate-600 mb-1">Assign to <span class="font-normal text-slate-400">(optional — leave unassigned for anyone with access to complete)</span></label>
-              <select name="assigned_to" id="new-deadline-assignee" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm">
-                <option value="">Unassigned</option>
+              <label for="new-deadline-related-item" class="block text-xs font-semibold text-slate-600 mb-1">Related agenda item <span class="font-normal text-slate-400">(optional)</span></label>
+              <select name="related_item_id" id="new-deadline-related-item" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm">
+                <option value="">Not linked to an agenda item</option>
               </select>
             </div>
             <p id="new-deadline-error" class="hidden sm:col-span-2 text-xs text-maroon-700"></p>

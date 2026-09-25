@@ -48,7 +48,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
         <section>
           <h2 class="font-display text-lg text-ink-900 mb-1"><i class="fa-solid fa-calendar-check text-info-700 mr-1.5"></i>Session and Legislative Meeting Management System</h2>
           <p class="text-xs text-slate-500 mb-3">Receives proposed schedules from Calendar Scheduling, replies with attendee/agenda confirmation, which then unlocks Meeting Coordination's "Send notifications" step.</p>
-          <div id="hub-scheduling-events" class="dossier-card p-4 space-y-2">
+          <div id="hub-scheduling-events" class="dossier-card p-4 space-y-2 max-h-96 overflow-y-auto overscroll-contain">
             <p class="text-xs text-slate-400">Loading…</p>
           </div>
         </section>

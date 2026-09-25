@@ -41,13 +41,18 @@ function blocksOverlap(int $startA, int $durA, int $startB, int $durB): bool {
  * @param string|null $presidingOfficer
  * @param string|null $excludeSessionId  session id to ignore (when editing an existing session)
  */
-function findSessionConflictDetails(PDO $db, string $date, string $time24h, string $venue, ?string $committee, ?string $presidingOfficer, ?string $excludeSessionId = null): array {
+function findSessionConflictDetails(PDO $db, string $date, string $time24h, string $venue, ?string $committee, ?string $presidingOfficer, ?string $excludeSessionId = null, ?string $sessionType = null): array {
     $proposedStart = timeToMinutes($time24h);
 
-    $sql = "SELECT id, session_time, session_time_24h, session_type, venue, committee, presiding_officer
+    $sql = "SELECT id, session_time, session_time_24h, session_type, venue, committee, presiding_officer, status
             FROM sessions
-            WHERE session_date = :date AND status IN ('Scheduled', 'Rescheduled') AND is_deleted = 0";
-    $params = [':date' => $date];
+            WHERE session_date = :date AND is_deleted = 0
+              AND (status IN ('Scheduled', 'Rescheduled')
+                   OR (status = 'Completed' AND session_type = 'Regular Session' AND :check_completed_regular = 1))";
+    $params = [
+        ':date' => $date,
+        ':check_completed_regular' => $sessionType === 'Regular Session' ? 1 : 0,
+    ];
 
     if ($excludeSessionId) {
         $sql .= " AND id != :exclude";
@@ -62,23 +67,33 @@ function findSessionConflictDetails(PDO $db, string $date, string $time24h, stri
 
     foreach ($sameDay as $existing) {
         $existingStart = timeToMinutes($existing['session_time_24h']);
-        if (!blocksOverlap($proposedStart, SESSION_BLOCK_MINUTES, $existingStart, SESSION_BLOCK_MINUTES)) {
+        $regularSessionSameDay = $sessionType === 'Regular Session'
+            && $existing['session_type'] === 'Regular Session'
+            && in_array($existing['status'], ['Scheduled', 'Rescheduled', 'Completed'], true);
+        $existingIsActive = in_array($existing['status'], ['Scheduled', 'Rescheduled'], true);
+        $timeOverlaps = $existingIsActive
+            && blocksOverlap($proposedStart, SESSION_BLOCK_MINUTES, $existingStart, SESSION_BLOCK_MINUTES);
+        if (!$regularSessionSameDay && !$timeOverlaps) {
             continue; // no time overlap at all, can't conflict on any dimension
         }
 
         $reasons = [];
-        if (strcasecmp($existing['venue'], $venue) === 0) {
+        if ($regularSessionSameDay) {
+            $reasons[] = 'Only one Regular Session can be scheduled per day';
+        }
+        if ($timeOverlaps && strcasecmp($existing['venue'], $venue) === 0) {
             $reasons[] = "Venue conflict: \"{$venue}\" is already booked";
         }
-        if ($committee && $existing['committee'] && strcasecmp($existing['committee'], $committee) === 0) {
+        if ($timeOverlaps && $committee && $existing['committee'] && strcasecmp($existing['committee'], $committee) === 0) {
             $reasons[] = "Committee conflict: {$committee} is already scheduled";
         }
-        if ($presidingOfficer && strcasecmp($existing['presiding_officer'], $presidingOfficer) === 0) {
+        if ($timeOverlaps && $presidingOfficer && strcasecmp($existing['presiding_officer'], $presidingOfficer) === 0) {
             $reasons[] = "Presiding officer conflict: {$presidingOfficer} is already presiding";
         }
         if ($reasons) {
             $conflicts[] = [
                 'session_id' => $existing['id'],
+                'status' => $existing['status'],
                 'description' => implode('; ', $reasons)
                     . " for {$existing['session_type']} at {$existing['session_time']} (session {$existing['id']}).",
             ];
@@ -89,9 +104,9 @@ function findSessionConflictDetails(PDO $db, string $date, string $time24h, stri
 }
 
 /** Returns the conflict descriptions used by the existing edit flow. */
-function checkSessionConflicts(PDO $db, string $date, string $time24h, string $venue, ?string $committee, ?string $presidingOfficer, ?string $excludeSessionId = null): array {
+function checkSessionConflicts(PDO $db, string $date, string $time24h, string $venue, ?string $committee, ?string $presidingOfficer, ?string $excludeSessionId = null, ?string $sessionType = null): array {
     return array_column(
-        findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer, $excludeSessionId),
+        findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer, $excludeSessionId, $sessionType),
         'description'
     );
 }
@@ -102,11 +117,11 @@ function checkSessionConflicts(PDO $db, string $date, string $time24h, string $v
  * as checkSessionConflicts). This is the "automatically suggest available
  * alternative times" behavior from the Definition of Terms.
  */
-function suggestAlternativeTimes(PDO $db, string $date, string $venue, ?string $committee, ?string $presidingOfficer, int $limit = 3): array {
+function suggestAlternativeTimes(PDO $db, string $date, string $venue, ?string $committee, ?string $presidingOfficer, int $limit = 3, ?string $sessionType = null): array {
     $suggestions = [];
     for ($hour = 8; $hour <= 17 && count($suggestions) < $limit; $hour++) {
         $candidate = sprintf('%02d:00:00', $hour);
-        $conflicts = checkSessionConflicts($db, $date, $candidate, $venue, $committee, $presidingOfficer);
+        $conflicts = checkSessionConflicts($db, $date, $candidate, $venue, $committee, $presidingOfficer, null, $sessionType);
         if (empty($conflicts)) {
             $suggestions[] = date('g:i A', strtotime($candidate));
         }

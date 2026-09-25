@@ -69,7 +69,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Time</label>
-              <input name="time" type="text" placeholder="9:00 AM" required class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm" />
+              <input name="time" type="time" step="60" required class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm" />
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Session type</label>
