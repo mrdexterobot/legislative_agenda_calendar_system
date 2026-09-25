@@ -50,9 +50,9 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
             <div id="upcoming-agenda" class="space-y-3"></div>
           </section>
 
-          <section>
+          <section class="min-w-0">
             <h2 class="font-display text-lg text-ink-900 mb-3">Recent activity</h2>
-            <div class="dossier-card p-4 divide-y divide-[--line-200]" id="activity-feed"></div>
+            <div class="dossier-card p-4 divide-y divide-[--line-200] overflow-hidden" id="activity-feed"></div>
           </section>
         </div>
 
@@ -96,6 +96,6 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
 <script src="js/api-client.js"></script>
 <script src="js/helpers.js"></script>
 <script src="js/nav.js?v=audit-logs"></script>
-<script src="js/dashboard.js"></script>
+<script src="js/dashboard.js?v=2"></script>
 </body>
 </html>

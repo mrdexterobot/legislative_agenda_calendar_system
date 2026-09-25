@@ -46,7 +46,7 @@ async function renderDashboard() {
         <div class="flex items-start gap-3 py-3">
           <div class="w-7 h-7 rounded-full bg-paper-100 flex items-center justify-center text-ink-700 text-xs shrink-0"><i class="fa-solid ${activityIcon(a.action)}"></i></div>
           <div class="flex-1 min-w-0 overflow-hidden">
-            <p class="text-sm text-ink-900 break-words">${escapeHtml(activitySummary(a))}</p>
+            <p class="text-sm text-ink-900 break-words [overflow-wrap:anywhere]">${escapeHtml(activitySummary(a))}</p>
             <p class="text-[11px] text-slate-500">${new Date(a.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
           </div>
         </div>
@@ -74,12 +74,19 @@ function activitySummary(a) {
     const jsonStart = a.details.indexOf("{");
     try {
       const parsed = JSON.parse(a.details.slice(jsonStart));
-      const keys = Object.keys(parsed).filter(k => k !== "item_id" && k !== "id");
-      const changedFields = keys.length ? keys.join(", ").replace(/_/g, " ") : "";
       const refId = parsed.item_id || parsed.id || entityLabel;
       const prefix = actor ? `${actionLabel} ${actor}` : actionLabel;
-      if (changedFields) {
-        return `${prefix}: ${refId} — ${changedFields}`;
+
+      const activeKeys = Object.keys(parsed).filter(k => k !== "item_id" && k !== "id" && parsed[k] !== null && parsed[k] !== "");
+      if (activeKeys.length) {
+        const fieldSummaries = activeKeys.map(k => {
+          const val = parsed[k];
+          const cleanKey = k.replace(/_/g, " ");
+          return (typeof val === "string" || typeof val === "number") && String(val).length < 25
+            ? `${cleanKey} (${val})`
+            : cleanKey;
+        }).join(", ");
+        return `${prefix}: ${refId} — ${fieldSummaries}`;
       }
       return `${prefix}: ${refId}`;
     } catch (e) {
