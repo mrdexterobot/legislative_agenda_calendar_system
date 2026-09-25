@@ -72,9 +72,19 @@ foreach ($upcomingSessions as &$s) {
 }
 unset($s);
 
+// Keep superadmin actions out of the dashboard feed for all other roles.
+// Enforce this in the API query so those rows are never sent to the browser.
+$activityVisibility = ($user['role'] ?? '') === 'superadmin'
+    ? ''
+    : "AND NOT EXISTS (
+           SELECT 1 FROM users activity_actor
+           WHERE activity_actor.id = audit_log.user_id
+             AND activity_actor.role = 'superadmin'
+       )";
 $recentActivity = $db->query(
     "SELECT username, action, entity_type, entity_id, details, created_at FROM audit_log
      WHERE action NOT LIKE 'login%' AND action != 'logout'
+       $activityVisibility
      ORDER BY created_at DESC LIMIT 8"
 )->fetchAll();
 
