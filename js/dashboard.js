@@ -46,7 +46,7 @@ async function renderDashboard() {
         <div class="flex items-start gap-3 py-3">
           <div class="w-7 h-7 rounded-full bg-paper-100 flex items-center justify-center text-ink-700 text-xs shrink-0"><i class="fa-solid ${activityIcon(a.action)}"></i></div>
           <div class="flex-1 min-w-0 overflow-hidden">
-            <p class="text-sm text-ink-900 break-words overflow-wrap-anywhere">${activitySummary(a)}</p>
+            <p class="text-sm text-ink-900 break-words">${escapeHtml(activitySummary(a))}</p>
             <p class="text-[11px] text-slate-500">${new Date(a.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
           </div>
         </div>
@@ -54,25 +54,36 @@ async function renderDashboard() {
     : `<p class="text-sm text-slate-400 p-4">No activity recorded yet.</p>`;
 }
 
+function escapeHtml(str) {
+  return String(str ?? "").replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[c]));
+}
+
 function activitySummary(a) {
   const actor = a.username ? `by ${a.username}` : "";
   const entityLabel = a.entity_id || "";
+  const actionLabel = activityActionLabel(a.action);
 
-  // If details is raw JSON, parse it and summarize the changed fields instead
-  // of dumping the whole raw blob into the card.
-  if (a.details && a.details.startsWith("{")) {
+  // If details contains JSON (either standalone or prefixed like "Updated by Admin: {...}")
+  if (a.details && a.details.includes("{")) {
+    const jsonStart = a.details.indexOf("{");
     try {
-      const parsed = JSON.parse(a.details);
+      const parsed = JSON.parse(a.details.slice(jsonStart));
       const keys = Object.keys(parsed).filter(k => k !== "item_id" && k !== "id");
       const changedFields = keys.length ? keys.join(", ").replace(/_/g, " ") : "";
       const refId = parsed.item_id || parsed.id || entityLabel;
-      const actionLabel = activityActionLabel(a.action);
+      const prefix = actor ? `${actionLabel} ${actor}` : actionLabel;
       if (changedFields) {
-        return `${actionLabel} ${actor}: ${refId} — ${changedFields}`;
+        return `${prefix}: ${refId} — ${changedFields}`;
       }
-      return `${actionLabel} ${actor}: ${refId}`;
+      return `${prefix}: ${refId}`;
     } catch (e) {
-      // Fall through to text truncation
+      // Fall through to plain text truncation if JSON is malformed
     }
   }
 
@@ -81,7 +92,8 @@ function activitySummary(a) {
     return a.details.length > maxLen ? a.details.substring(0, maxLen) + "…" : a.details;
   }
 
-  return `${activityActionLabel(a.action)} ${actor} — ${a.entity_type} ${entityLabel}`.trim();
+  const subject = [actionLabel, actor].filter(Boolean).join(" ");
+  return `${subject} — ${a.entity_type} ${entityLabel}`.trim();
 }
 
 function activityActionLabel(action) {
