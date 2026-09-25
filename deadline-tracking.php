@@ -74,7 +74,7 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
             <div class="sm:col-span-2">
               <label for="new-deadline-related-item" class="block text-xs font-semibold text-slate-600 mb-1">Related agenda item <span class="font-normal text-slate-400">(optional)</span></label>
               <select name="related_item_id" id="new-deadline-related-item" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm">
-                <option value="">Not linked to an agenda item</option>
+                <option value="">Loading agenda items…</option>
               </select>
             </div>
             <p id="new-deadline-error" class="hidden sm:col-span-2 text-xs text-maroon-700"></p>
@@ -116,6 +116,6 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
 <script src="js/api-client.js"></script>
 <script src="js/helpers.js"></script>
 <script src="js/nav.js"></script>
-<script src="js/deadline-tracking.js"></script>
+<script src="js/deadline-tracking.js?v=<?php echo (int) filemtime(__DIR__ . '/js/deadline-tracking.js'); ?>"></script>
 </body>
 </html>

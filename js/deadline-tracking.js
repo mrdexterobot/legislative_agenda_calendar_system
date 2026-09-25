@@ -254,19 +254,28 @@ function closeCompleteDeadlineModal() {
 async function loadDeadlineAgendaItemOptions() {
   const select = document.getElementById("new-deadline-related-item");
   if (!select) return;
+  select.replaceChildren(new Option("Loading agenda items…", ""));
   try {
     const items = await window.API.get("api/agenda-items/list.php");
-    select.replaceChildren(new Option("Not linked to an agenda item", ""));
-    items.forEach(item => {
+    if (!Array.isArray(items)) throw new Error("Agenda item list response was not an array.");
+    const selectableItems = items.filter(item => item?.id && item?.title);
+    select.replaceChildren(new Option(
+      selectableItems.length ? "Not linked to an agenda item" : "No active agenda items",
+      ""
+    ));
+    selectableItems.forEach(item => {
       select.add(new Option(`${item.id} — ${item.title}`, item.id));
     });
   } catch (err) {
-    select.replaceChildren(new Option("Could not load agenda items", ""));
+    select.replaceChildren(new Option("Could not load agenda items — try again", ""));
   }
 }
 
-document.getElementById("new-deadline-btn")?.addEventListener("click", () => {
-  document.getElementById("new-deadline-panel").classList.toggle("hidden");
+document.getElementById("new-deadline-btn")?.addEventListener("click", async () => {
+  const panel = document.getElementById("new-deadline-panel");
+  const opening = panel.classList.contains("hidden");
+  panel.classList.toggle("hidden");
+  if (opening) await loadDeadlineAgendaItemOptions();
 });
 
 document.getElementById("new-deadline-form")?.addEventListener("submit", async (e) => {
