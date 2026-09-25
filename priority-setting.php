@@ -49,8 +49,8 @@ $csrfToken = $_SESSION['csrf_token'] ?? generateCsrfToken();
           <h3 class="font-display text-base text-ink-900 mb-3">Encode a new ordinance/resolution</h3>
           <form id="new-item-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-600 mb-1">ID (e.g. ORD-2026-020)</label>
-              <input name="id" required placeholder="ORD-2026-020" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm font-mono" />
+              <label for="generated-item-id" class="block text-xs font-semibold text-slate-600 mb-1">Generated ID</label>
+              <input id="generated-item-id" type="text" readonly aria-readonly="true" placeholder="Generated automatically" class="w-full border border-[--line-200] rounded-lg px-3 py-2 text-sm font-mono bg-paper-100" />
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-600 mb-1">Type</label>

@@ -1,6 +1,33 @@
 let priorityFilter = "all";
 let allItems = [];
 let modalState = { itemId: null, selectedLevel: null };
+let itemIdPreviewRequest = 0;
+
+async function refreshGeneratedItemId() {
+  const idInput = document.getElementById("generated-item-id");
+  const typeInput = document.querySelector('#new-item-form [name="item_type"]');
+  const dateInput = document.querySelector('#new-item-form [name="date_filed"]');
+  if (!idInput || !typeInput) return;
+
+  const request = ++itemIdPreviewRequest;
+  const year = /^\d{4}-\d{2}-\d{2}$/.test(dateInput?.value || "")
+    ? dateInput.value.slice(0, 4)
+    : String(new Date().getFullYear());
+  idInput.value = "Generating…";
+  idInput.placeholder = "";
+
+  try {
+    const result = await window.API.get(
+      `api/agenda-items/next-id.php?item_type=${encodeURIComponent(typeInput.value)}&year=${encodeURIComponent(year)}`
+    );
+    if (request === itemIdPreviewRequest) idInput.value = result.id;
+  } catch (err) {
+    if (request === itemIdPreviewRequest) {
+      idInput.value = "";
+      idInput.placeholder = "Generated automatically when saved";
+    }
+  }
+}
 
 async function renderPriorityModule() {
   try {
@@ -216,16 +243,22 @@ function renderModal(notesValue, showError) {
   });
 }
 
+document.querySelector('#new-item-form [name="item_type"]')?.addEventListener("change", refreshGeneratedItemId);
+document.querySelector('#new-item-form [name="date_filed"]')?.addEventListener("change", refreshGeneratedItemId);
+refreshGeneratedItemId();
+
 document.getElementById("new-item-form")?.addEventListener("submit", async (e) => {
   e.preventDefault();
   const fd = new FormData(e.target);
   const errorEl = document.getElementById("new-item-error");
   errorEl.classList.add("hidden");
   try {
-    await window.API.post("api/agenda-items/create.php", Object.fromEntries(fd));
+    const created = await window.API.post("api/agenda-items/create.php", Object.fromEntries(fd));
     e.target.reset();
+    refreshGeneratedItemId();
     document.getElementById("new-item-panel").classList.add("hidden");
     renderPriorityModule();
+    showHubToast(`Agenda item saved as ${created.id}.`);
   } catch (err) {
     errorEl.textContent = err.message;
     errorEl.classList.remove("hidden");
