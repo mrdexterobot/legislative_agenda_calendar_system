@@ -9,6 +9,7 @@
 
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
+require_once __DIR__ . '/../../includes/evidence.php';
 
 $user = requireApiAuth();
 
@@ -22,7 +23,10 @@ if (!$id) {
 }
 
 $db = getDb();
-$stmt = $db->prepare('SELECT * FROM evidence_attachments WHERE id = :id');
+$stmt = $db->prepare(
+    'SELECT id, entity_type, entity_id, original_filename, stored_filename, file_size, mime_type
+     FROM evidence_attachments WHERE id = :id'
+);
 $stmt->execute([':id' => $id]);
 $attachment = $stmt->fetch();
 if (!$attachment) {
@@ -46,14 +50,26 @@ if ($attachment['entity_type'] === 'agenda_item' && !isAdminOrAbove($user)) {
     jsonError('Only an administrator can download Mayor-action evidence.', 403);
 }
 
+if (!evidenceStoredFilenameIsSafe($attachment['stored_filename'])) {
+    jsonError('The stored file reference is invalid.', 404);
+}
+
 $path = __DIR__ . '/../../uploads/evidence/' . $attachment['stored_filename'];
 if (!is_file($path)) {
     jsonError('The file is missing from storage.', 404);
 }
 
-header('Content-Type: ' . ($attachment['mime_type'] ?: 'application/octet-stream'));
-header('Content-Disposition: attachment; filename="' . str_replace('"', '', $attachment['original_filename']) . '"');
-header('Content-Length: ' . filesize($path));
+$downloadName = evidenceDownloadFilename($attachment['original_filename'], 'evidence-download');
+$asciiName = preg_replace('/[^\x20-\x7E]/', '_', $downloadName) ?? 'evidence-download';
+$asciiName = str_replace(['\\', '"', ';'], '_', $asciiName);
+$contentLength = filesize($path);
+
+header('Content-Type: ' . evidenceDownloadMimeType($attachment['mime_type'], $attachment['stored_filename']));
+header('Content-Disposition: attachment; filename="' . $asciiName . '"; filename*=UTF-8\'\'' . rawurlencode($downloadName));
+if ($contentLength !== false) {
+    header('Content-Length: ' . $contentLength);
+}
 header('X-Content-Type-Options: nosniff');
+header('Cache-Control: private, no-store');
 readfile($path);
 exit;

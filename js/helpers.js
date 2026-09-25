@@ -149,7 +149,15 @@ async function loadEvidenceList(entityType, entityId) {
 
 function evidenceFileLink(att) {
   const prefix = window.API_PREFIX || '';
-  return `<a href="${prefix}api/evidence/download.php?id=${att.id}" target="_blank" rel="noopener" class="text-info-700 hover:underline"><i class="fa-solid fa-paperclip mr-1"></i>${att.original_filename}</a>`;
+  const safeName = String(att.original_filename || "evidence download").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  }[character]));
+  const safeId = encodeURIComponent(String(att.id || ""));
+  return `<a href="${prefix}api/evidence/download.php?id=${safeId}" target="_blank" rel="noopener" class="text-info-700 hover:underline"><i class="fa-solid fa-paperclip mr-1"></i>${safeName}</a>`;
 }
 
 /** Small reusable "type a reason, then confirm" modal for admin

@@ -27,6 +27,7 @@
 require_once __DIR__ . '/../../includes/db.php';
 require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/csrf.php';
+require_once __DIR__ . '/../../includes/evidence.php';
 
 $user = requireApiAuth();
 requireCsrfToken();
@@ -77,56 +78,86 @@ if ($entityType === 'deadline') {
 }
 
 // ---- File validation ----
-if (!isset($_FILES['file']) || $_FILES['file']['error'] === UPLOAD_ERR_NO_FILE) {
+if (!isset($_FILES['file']) || !is_array($_FILES['file']) || $_FILES['file']['error'] === UPLOAD_ERR_NO_FILE) {
     jsonError('No file was uploaded.', 400);
 }
 $file = $_FILES['file'];
-if ($file['error'] !== UPLOAD_ERR_OK) {
+if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
     jsonError('Upload failed (error code ' . $file['error'] . '). Try a smaller file.', 400);
 }
 
-define('EVIDENCE_MAX_BYTES', 10 * 1024 * 1024); // 10 MB
-if ($file['size'] > EVIDENCE_MAX_BYTES) {
+$temporaryPath = is_string($file['tmp_name'] ?? null) ? $file['tmp_name'] : '';
+if ($temporaryPath === '' || !is_uploaded_file($temporaryPath)) {
+    jsonError('The uploaded file could not be verified.', 400);
+}
+
+$fileSize = filesize($temporaryPath);
+if ($fileSize === false) {
+    jsonError('The uploaded file size could not be determined.', 400);
+}
+if ($fileSize > EVIDENCE_MAX_BYTES) {
     jsonError('File is too large — 10MB maximum.', 422);
 }
 
-$originalName = basename($file['name']);
-$ext = strtolower(pathinfo($originalName, PATHINFO_EXTENSION));
-$allowedExt = ['pdf', 'jpg', 'jpeg', 'png', 'doc', 'docx', 'xls', 'xlsx'];
-if (!in_array($ext, $allowedExt, true)) {
-    jsonError('Unsupported file type. Allowed: ' . implode(', ', $allowedExt) . '.', 422);
+$rawName = is_string($file['name'] ?? null) ? $file['name'] : '';
+$ext = strtolower(pathinfo(str_replace('\\', '/', $rawName), PATHINFO_EXTENSION));
+if (!in_array($ext, EVIDENCE_ALLOWED_EXTENSIONS, true)) {
+    jsonError('Unsupported file type. Allowed: ' . implode(', ', EVIDENCE_ALLOWED_EXTENSIONS) . '.', 422);
 }
+
+try {
+    $detectedMime = evidenceValidateFile($temporaryPath, $ext);
+} catch (InvalidArgumentException $e) {
+    jsonError('Unsupported or invalid document file.', 422);
+} catch (RuntimeException $e) {
+    error_log('Evidence file validation failed: ' . $e->getMessage());
+    jsonError('The uploaded file could not be validated. Please try again later.', 500);
+}
+$originalName = evidenceSanitizeOriginalFilename($rawName, $ext);
 
 $uploadDir = __DIR__ . '/../../uploads/evidence';
 if (!is_dir($uploadDir)) {
-    mkdir($uploadDir, 0755, true);
+    if (!mkdir($uploadDir, 0755, true) && !is_dir($uploadDir)) {
+        error_log('Failed to create the evidence upload directory.');
+        jsonError('Could not prepare file storage. Please try again later.', 500);
+    }
+}
+if (!is_writable($uploadDir)) {
+    error_log('Evidence upload directory is not writable.');
+    jsonError('File storage is not writable. Please contact an administrator.', 500);
 }
 
 $storedName = bin2hex(random_bytes(16)) . '.' . $ext;
 $destination = $uploadDir . '/' . $storedName;
 
-if (!move_uploaded_file($file['tmp_name'], $destination)) {
-    error_log("Failed to move uploaded evidence file to $destination");
+if (!move_uploaded_file($temporaryPath, $destination)) {
+    error_log('Failed to move uploaded evidence file into the evidence storage directory.');
     jsonError('Could not save the uploaded file. Please try again.', 500);
 }
 
-$stmt = $db->prepare(
-    "INSERT INTO evidence_attachments (entity_type, entity_id, original_filename, stored_filename, file_size, mime_type, uploaded_by)
-     VALUES (:type, :id, :orig, :stored, :size, :mime, :by)"
-);
-$stmt->execute([
-    ':type'   => $entityType,
-    ':id'     => $entityId,
-    ':orig'   => $originalName,
-    ':stored' => $storedName,
-    ':size'   => $file['size'],
-    ':mime'   => $file['type'] ?: null,
-    ':by'     => $user['full_name'],
-]);
+try {
+    $stmt = $db->prepare(
+        "INSERT INTO evidence_attachments (entity_type, entity_id, original_filename, stored_filename, file_size, mime_type, uploaded_by)
+         VALUES (:type, :id, :orig, :stored, :size, :mime, :by)"
+    );
+    $stmt->execute([
+        ':type'   => $entityType,
+        ':id'     => $entityId,
+        ':orig'   => $originalName,
+        ':stored' => $storedName,
+        ':size'   => $fileSize,
+        ':mime'   => $detectedMime,
+        ':by'     => $user['full_name'],
+    ]);
+} catch (Throwable $e) {
+    @unlink($destination);
+    error_log('Failed to record uploaded evidence metadata: ' . $e->getMessage());
+    jsonError('Could not record the uploaded file. Please try again later.', 500);
+}
 $attachmentId = (int) $db->lastInsertId();
 
 jsonSuccess([
     'id'                => $attachmentId,
     'original_filename' => $originalName,
-    'file_size'         => (int) $file['size'],
+    'file_size'         => (int) $fileSize,
 ], 201);
