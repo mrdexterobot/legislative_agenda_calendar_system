@@ -39,12 +39,18 @@ if ($reason === '') {
 }
 
 $db = getDb();
-$stmt = $db->prepare('SELECT id, notifications_sent, notifications_sent_by FROM meetings WHERE session_id = :sid');
+$stmt = $db->prepare(
+    'SELECT m.id, m.notifications_sent, m.notifications_sent_by, s.status
+     FROM meetings m JOIN sessions s ON s.id = m.session_id WHERE m.session_id = :sid'
+);
 $stmt->execute([':sid' => $sessionId]);
 $meeting = $stmt->fetch();
 
 if (!$meeting) {
     jsonError('No meeting record found for this session.', 404);
+}
+if (in_array($meeting['status'], ['Completed', 'Cancelled'], true)) {
+    jsonError('Notifications cannot be changed for a ' . strtolower($meeting['status']) . ' session.', 409);
 }
 if (!$meeting['notifications_sent']) {
     jsonError('Notifications were not marked as sent for this meeting — nothing to undo.', 409);

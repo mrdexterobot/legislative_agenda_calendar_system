@@ -227,7 +227,7 @@ document.getElementById("new-session-form")?.addEventListener("submit", async (e
         <ul class="list-disc list-inside mb-2">${conflicts.map(c => `<li>${c}</li>`).join("")}</ul>
         ${alternatives.length ? `<p>Available times at this venue: <strong>${alternatives.join(", ")}</strong></p>` : `<p>No open slots found that day at this venue between 8 AM–5 PM.</p>`}
         <label class="flex items-center gap-2 mt-2">
-          <input type="checkbox" id="override-conflict-check" class="rounded" /> Schedule anyway (will be logged as an override)
+          <input type="checkbox" id="override-conflict-check" class="rounded" /> Replace the conflicting schedule(s) (they will be marked Cancelled and kept in history)
         </label>
       `;
       warningEl.classList.remove("hidden");
@@ -240,6 +240,9 @@ document.getElementById("new-session-form")?.addEventListener("submit", async (e
           form.reset();
           document.getElementById("new-session-panel").classList.add("hidden");
           await renderCalendarModule();
+          if (result2.sessions_replaced?.length) {
+            showHubToast(`Replaced ${result2.sessions_replaced.length} conflicting schedule(s); prior schedule(s) remain in history.`);
+          }
           if (result2.integration_events?.length) revealIntegrationSequence(result2.integration_events);
         } catch (err2) {
           alert(`Could not save: ${err2.message}`);

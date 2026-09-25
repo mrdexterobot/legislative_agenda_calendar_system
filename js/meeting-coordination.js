@@ -67,13 +67,16 @@ async function renderMeetingModule() {
     const doneCount = allItems.filter(c => c.val).length;
     const readyToSend = allItems.every(c => c.val);
     const missing = allItems.filter(c => !c.val).map(c => c.label);
+    const sessionOver = m.status === "Completed" || m.status === "Cancelled";
 
     const confirmationBadge = (m.attendees_confirmed && m.agenda_confirmed)
       ? `<span class="pill pill-forest"><i class="fa-solid fa-circle-check mr-1"></i>Schedule confirmed by Session Mgmt System</span>`
       : `<span class="pill pill-brass"><i class="fa-regular fa-hourglass-half mr-1"></i>Awaiting external confirmation (${[!m.attendees_confirmed && "councilors", !m.agenda_confirmed && "agenda"].filter(Boolean).join(", ")})</span>`;
 
     let sendButton;
-    if (m.notifications_sent) {
+    if (sessionOver) {
+      sendButton = `<p class="text-[11px] text-slate-400"><i class="fa-solid fa-lock mr-1"></i>Notifications are unavailable for a ${m.status.toLowerCase()} session.</p>`;
+    } else if (m.notifications_sent) {
       sendButton = `<p class="text-xs text-forest-700"><i class="fa-solid fa-check-double mr-1"></i>Sent by ${m.notifications_sent_by || "—"} on ${new Date(m.notifications_sent_at).toLocaleString()}</p>`
         + (isAdmin ? `<button data-undo-notifications="${m.session_id}" class="text-[11px] text-maroon-700 hover:underline mt-1"><i class="fa-solid fa-rotate-left mr-0.5"></i>Undo (mistaken send)</button>` : "");
     } else if (readyToSend && isAdmin) {
@@ -89,7 +92,6 @@ async function renderMeetingModule() {
     // Once notifications are sent, the checklist state that justified that
     // action shouldn't be silently changeable afterward.
     const locked = m.notifications_sent;
-    const sessionOver = m.status === "Completed" || m.status === "Cancelled";
 
     return `
       <div class="dossier-card p-5">
@@ -163,7 +165,7 @@ async function renderMeetingModule() {
                 </div>
               `).join("") : `<span class="text-xs text-slate-400">Nobody on the list yet — add someone below.</span>`}
             </div>
-            ${isAdmin ? `<button data-add-stakeholder="${m.meeting_id}" class="text-[11px] text-ink-700 hover:underline mb-3 inline-block"><i class="fa-solid fa-plus mr-0.5"></i>Add someone</button>` : ""}
+            ${isAdmin && !sessionOver ? `<button data-add-stakeholder="${m.meeting_id}" class="text-[11px] text-ink-700 hover:underline mb-3 inline-block"><i class="fa-solid fa-plus mr-0.5"></i>Add someone</button>` : ""}
             <div id="add-stakeholder-panel-${m.meeting_id}" class="hidden dossier-card p-3 mb-3"></div>
             ${sendButton}
           </div>

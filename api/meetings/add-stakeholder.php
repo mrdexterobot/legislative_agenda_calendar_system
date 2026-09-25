@@ -40,11 +40,17 @@ if (!$meetingId) {
 }
 
 $db = getDb();
-$meetingCheck = $db->prepare('SELECT id, session_id, notifications_sent FROM meetings WHERE id = :id');
+$meetingCheck = $db->prepare(
+    'SELECT m.id, m.session_id, m.notifications_sent, s.status
+     FROM meetings m JOIN sessions s ON s.id = m.session_id WHERE m.id = :id'
+);
 $meetingCheck->execute([':id' => $meetingId]);
 $meetingRow = $meetingCheck->fetch();
 if (!$meetingRow) {
     jsonError('Meeting not found.', 404);
+}
+if (in_array($meetingRow['status'], ['Completed', 'Cancelled'], true)) {
+    jsonError('Recipients cannot be added to a ' . strtolower($meetingRow['status']) . ' session.', 409);
 }
 
 if ($userId !== null) {

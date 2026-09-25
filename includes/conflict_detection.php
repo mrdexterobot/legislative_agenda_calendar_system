@@ -41,7 +41,7 @@ function blocksOverlap(int $startA, int $durA, int $startB, int $durB): bool {
  * @param string|null $presidingOfficer
  * @param string|null $excludeSessionId  session id to ignore (when editing an existing session)
  */
-function checkSessionConflicts(PDO $db, string $date, string $time24h, string $venue, ?string $committee, ?string $presidingOfficer, ?string $excludeSessionId = null): array {
+function findSessionConflictDetails(PDO $db, string $date, string $time24h, string $venue, ?string $committee, ?string $presidingOfficer, ?string $excludeSessionId = null): array {
     $proposedStart = timeToMinutes($time24h);
 
     $sql = "SELECT id, session_time, session_time_24h, session_type, venue, committee, presiding_officer
@@ -66,18 +66,34 @@ function checkSessionConflicts(PDO $db, string $date, string $time24h, string $v
             continue; // no time overlap at all, can't conflict on any dimension
         }
 
+        $reasons = [];
         if (strcasecmp($existing['venue'], $venue) === 0) {
-            $conflicts[] = "Venue conflict: \"{$venue}\" is already booked for {$existing['session_type']} at {$existing['session_time']} (session {$existing['id']}).";
+            $reasons[] = "Venue conflict: \"{$venue}\" is already booked";
         }
         if ($committee && $existing['committee'] && strcasecmp($existing['committee'], $committee) === 0) {
-            $conflicts[] = "Committee conflict: {$committee} already has {$existing['session_type']} at {$existing['session_time']} (session {$existing['id']}).";
+            $reasons[] = "Committee conflict: {$committee} is already scheduled";
         }
         if ($presidingOfficer && strcasecmp($existing['presiding_officer'], $presidingOfficer) === 0) {
-            $conflicts[] = "Presiding officer conflict: {$presidingOfficer} is already presiding over {$existing['session_type']} at {$existing['session_time']} (session {$existing['id']}).";
+            $reasons[] = "Presiding officer conflict: {$presidingOfficer} is already presiding";
+        }
+        if ($reasons) {
+            $conflicts[] = [
+                'session_id' => $existing['id'],
+                'description' => implode('; ', $reasons)
+                    . " for {$existing['session_type']} at {$existing['session_time']} (session {$existing['id']}).",
+            ];
         }
     }
 
     return $conflicts;
+}
+
+/** Returns the conflict descriptions used by the existing edit flow. */
+function checkSessionConflicts(PDO $db, string $date, string $time24h, string $venue, ?string $committee, ?string $presidingOfficer, ?string $excludeSessionId = null): array {
+    return array_column(
+        findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer, $excludeSessionId),
+        'description'
+    );
 }
 
 /**

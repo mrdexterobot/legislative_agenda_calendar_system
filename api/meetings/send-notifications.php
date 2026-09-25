@@ -38,6 +38,9 @@ $meeting = loadMeetingForNotice($db, $sessionId);
 if (!$meeting) {
     jsonError('No meeting record found for this session.', 404);
 }
+if (in_array($meeting['status'], ['Completed', 'Cancelled'], true)) {
+    jsonError('Notifications cannot be sent for a ' . strtolower($meeting['status']) . ' session.', 409);
+}
 
 // ---- Gate 1: don't double-send ----
 if ($meeting['notifications_sent']) {

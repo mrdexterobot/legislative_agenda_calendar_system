@@ -53,13 +53,15 @@ if ($errors) {
 $db = getDb();
 
 // ---- Conflict detection (venue / committee / presiding officer, same day) ----
-$conflicts = checkSessionConflicts($db, $date, $time24h, $venue, $committee, $presidingOfficer);
+$conflictDetails = findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer);
+$conflicts = array_column($conflictDetails, 'description');
 
 if ($conflicts && !$forceOverride) {
     $alternatives = suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer);
     jsonError('Scheduling conflict detected.', 409, [
-        'conflicts'    => $conflicts,
-        'alternatives' => $alternatives,
+        'conflicts'            => $conflicts,
+        'conflicting_sessions' => $conflictDetails,
+        'alternatives'         => $alternatives,
     ]);
 }
 
@@ -76,9 +78,33 @@ if ($agendaItemIds) {
 }
 
 $sessionId = 'SESS-' . strtoupper(bin2hex(random_bytes(3)));
+$replacedSessionIds = [];
 
 $db->beginTransaction();
 try {
+    // Recheck within the transaction. When the caller confirmed replacement,
+    // cancel each active conflicting schedule and keep its row as history.
+    $conflictDetails = findSessionConflictDetails($db, $date, $time24h, $venue, $committee, $presidingOfficer);
+    $conflicts = array_column($conflictDetails, 'description');
+    if ($conflicts && !$forceOverride) {
+        $db->rollBack();
+        $alternatives = suggestAlternativeTimes($db, $date, $venue, $committee, $presidingOfficer);
+        jsonError('Scheduling conflict detected.', 409, [
+            'conflicts'            => $conflicts,
+            'conflicting_sessions' => $conflictDetails,
+            'alternatives'         => $alternatives,
+        ]);
+    }
+
+    if ($forceOverride && $conflictDetails) {
+        $replacedSessionIds = array_column($conflictDetails, 'session_id');
+        $placeholders = implode(',', array_fill(0, count($replacedSessionIds), '?'));
+        $db->prepare(
+            "UPDATE sessions SET status = 'Cancelled'
+             WHERE id IN ($placeholders) AND status IN ('Scheduled', 'Rescheduled') AND is_deleted = 0"
+        )->execute($replacedSessionIds);
+    }
+
     $db->prepare(
         "INSERT INTO sessions (id, session_date, session_time, session_time_24h, session_type, venue, presiding_officer, committee, sequence_number, status, created_by)
          VALUES (:id, :date, :time_display, :time24h, :type, :venue, :presiding, :committee, :sequence, 'Scheduled', :created_by)"
@@ -186,11 +212,16 @@ try {
     jsonError('Failed to save the session. Please try again.', 500);
 }
 
-$auditNote = $conflicts
-    ? "Saved WITH conflicts overridden by {$user['full_name']}: " . implode(' | ', $conflicts)
+$auditNote = $replacedSessionIds
+    ? "Replacement schedule created by {$user['full_name']}; cancelled " . implode(', ', $replacedSessionIds)
+        . ' after conflict: ' . implode(' | ', $conflicts)
     : "Scheduled by {$user['full_name']}";
 $auditNote .= ' — notification list seeded with ' . count($activeUsers) . ' active account(s).';
 logAudit('create', 'session', $sessionId, $auditNote);
+foreach ($replacedSessionIds as $replacedSessionId) {
+    logAudit('replace', 'session', $replacedSessionId,
+        "Cancelled and replaced by {$sessionId} after a confirmed scheduling conflict; action by {$user['full_name']}.");
+}
 
 $eventsStmt = $db->prepare(
     "SELECT direction, event_type, summary, created_at FROM integration_events WHERE related_session_id = :sid ORDER BY id ASC"
@@ -200,6 +231,7 @@ $eventsStmt->execute([':sid' => $sessionId]);
 jsonSuccess([
     'id'                    => $sessionId,
     'conflicts_overridden'  => $conflicts,
+    'sessions_replaced'     => $replacedSessionIds,
     'external_response'     => $externalResponse,
     'stakeholders_seeded'   => count($activeUsers),
     'integration_events'    => $eventsStmt->fetchAll(),

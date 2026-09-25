@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $b = getJsonBody();
 
-$title        = trim($b['title'] ?? '');
+$title        = preg_replace('/\s+/u', ' ', trim($b['title'] ?? '')) ?? trim($b['title'] ?? '');
 $itemType     = $b['item_type'] ?? '';
 $committee    = trim($b['committee'] ?? '');
 $submittedBy  = trim($b['submitted_by'] ?? '');
@@ -37,12 +37,32 @@ if ($errors) {
 
 $db = getDb();
 
+// Serialize title checks so two simultaneous submissions cannot both create
+// the same ordinance/resolution title. Archived items still count as existing.
+$titleLockName = 'agenda_item_title_guard';
+$titleLock = $db->prepare('SELECT GET_LOCK(:lock_name, 10)');
+$titleLock->execute([':lock_name' => $titleLockName]);
+if ((int) $titleLock->fetchColumn() !== 1) {
+    jsonError('Could not check for duplicate agenda item titles. Please try again.', 503);
+}
+
+$duplicateTitle = $db->prepare(
+    'SELECT id FROM agenda_items WHERE LOWER(TRIM(title)) = LOWER(:title) LIMIT 1'
+);
+$duplicateTitle->execute([':title' => $title]);
+$existingTitle = $duplicateTitle->fetchColumn();
+if ($existingTitle !== false) {
+    $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $titleLockName]);
+    jsonError('An agenda item with this title already exists (ID ' . $existingTitle . ').', 409);
+}
+
 $year = substr($dateFiled, 0, 4);
 $prefix = $itemType === 'Ordinance' ? 'ORD' : 'RES';
 $lockName = "agenda_item_id_{$prefix}_{$year}";
 $lock = $db->prepare('SELECT GET_LOCK(:lock_name, 10)');
 $lock->execute([':lock_name' => $lockName]);
 if ((int) $lock->fetchColumn() !== 1) {
+    $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $titleLockName]);
     jsonError('Could not reserve an agenda item number. Please try again.', 503);
 }
 
@@ -77,10 +97,12 @@ try {
         $db->rollBack();
     }
     $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $lockName]);
+    $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $titleLockName]);
     error_log('Failed to create agenda item: ' . $e->getMessage());
     jsonError('Failed to save the agenda item. Please try again.', 500);
 }
 $db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $lockName]);
+$db->prepare('SELECT RELEASE_LOCK(:lock_name)')->execute([':lock_name' => $titleLockName]);
 
 logAudit('create', 'agenda_item', $id, "Encoded by {$user['full_name']}");
 
